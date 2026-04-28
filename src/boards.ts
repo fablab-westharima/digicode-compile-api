@@ -24,10 +24,12 @@ export const FQBN_TO_PIO: Record<string, PioTarget> = {
   'esp32:esp32:esp32c6': { platform: 'espressif32', board: 'esp32-c6-devkitm-1' },
   // M5Stack
   'm5stack:esp32:m5stack_core': { platform: 'espressif32', board: 'm5stack-core-esp32' },
-  'm5stack:esp32:m5stick_c_plus': { platform: 'espressif32', board: 'm5stick-c-plus' },
+  // M5StickC Plus has no PIO espressif32 board ID; fall back to base m5stick-c.
+  // User-side M5StickCPlus library handles screen/battery diff at runtime.
+  'm5stack:esp32:m5stick_c_plus': { platform: 'espressif32', board: 'm5stick-c' },
   'm5stack:esp32:atom_lite': { platform: 'espressif32', board: 'm5stack-atom' },
   'm5stack:esp32:atom_matrix': { platform: 'espressif32', board: 'm5stack-atom' },
-  'm5stack:esp32:stamp_pico': { platform: 'espressif32', board: 'esp32dev' },
+  'm5stack:esp32:stamp_pico': { platform: 'espressif32', board: 'm5stamp-pico' },
   // RP2040
   'rp2040:rp2040:rpipico': { platform: 'raspberrypi', board: 'pico' },
   'rp2040:rp2040:rpipicow': { platform: 'raspberrypi', board: 'pico' },
