@@ -1,0 +1,36 @@
+DigiCode Compile API — Proprietary License
+
+Copyright (c) 2026 DigiCo LLC (合同会社デジコ). All rights reserved.
+
+The following components in this software are proprietary to DigiCo LLC
+and are protected under applicable copyright laws:
+
+  - compile-api/src/ (server source code)
+  - compile-api/scripts/ (build scripts)
+  - compile-api/templates/ (DigiCodeOTA.ino, DigiCodeUSB.ino,
+    DigiCodeBLE.ino, BasicArduino.ino)
+  - compile-api/libs/DigiCodeHumanoid/
+  - compile-api/libs/DigiCodeTransform/
+  - compile-api/libs/DigiCodeWheel/
+
+PERMITTED:
+  - Running this software for personal, educational, or commercial use
+    via the provided Docker image as distributed by DigiCo LLC.
+
+PROHIBITED:
+  - Copying, modifying, merging, publishing, distributing, sublicensing,
+    or selling copies of the proprietary components listed above.
+  - Extracting proprietary components from the Docker image for use in
+    other software or services.
+  - Reverse engineering or decompiling the proprietary components,
+    except as permitted by applicable law.
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED. IN NO EVENT SHALL DIGICO LLC BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+
+Third-party open-source components included in this Docker image retain
+their original licenses (MIT, Apache 2.0, LGPL, etc.). See individual
+library directories for their respective license terms.
+
+Contact: contact@digi-co.jp
