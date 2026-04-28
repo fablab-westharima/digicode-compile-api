@@ -32,7 +32,7 @@ LIBS_DIR=/opt/digicode-compile/libs \
 npm run dev
 ```
 
-## ML30 deploy (Phase 2 PoC, port 3002 to coexist with legacy on 3001)
+## ML30 deploy (Phase 3, port 3004 to coexist with legacy on 3002)
 
 ```bash
 # Sync
@@ -44,9 +44,9 @@ cd /opt/digicode-compile/api && npm install && npm start
 
 ## Cutover plan (44.md §3.9)
 
-1. New API server runs on port 3002 alongside legacy on port 3001
+1. New API server runs on port 3004 alongside legacy on port 3002
 2. UAT against the 60-case baseline preserved at
    `variants/ota/frontend/scripts/probabilistic-debug-results/2026-04-28_12-37_p1_partial-60_pre-jobs-test/`
 3. Bin-equality check: legacy vs PIO firmware.bin SHA-256 for representative cases
-4. Cloudflare Tunnel reroute `compile.digital-fab.jp` from `:3001` → `:3002`
+4. Cloudflare Tunnel reroute `compile.digital-fab.jp` from `:3002` → `:3004`
 5. Decommission legacy `arduino-compile-server` container, free ML30 resources
