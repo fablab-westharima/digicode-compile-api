@@ -56,11 +56,14 @@ function buildPrimerIni(): string {
     const libDeps = buildLibDeps(LIBS_DIR, { platform: env.platform })
       .map((dep) => `    ${dep}`)
       .join('\n');
+    // lib_ldf_mode=off suppresses the dependency graph scan that causes
+    // WiFiServer.cpp.o errors on the rp2040 primer (45.md §5.3.1 finding).
+    const extraLines = env.platform === 'raspberrypi' ? 'lib_ldf_mode = off\n' : '';
     return `[env:${env.envName}]
 platform = ${env.platform}
 board = ${env.board}
 framework = arduino
-lib_deps =
+${extraLines}lib_deps =
 ${libDeps}
 `;
   }).join('\n');
