@@ -1,0 +1,98 @@
+#######################################
+# Syntax Coloring Map For DigiCodeHumanoid
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+DigiCodeHumanoid	KEYWORD1
+Oscillator	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+init	KEYWORD2
+setTrims	KEYWORD2
+saveTrimsToEEPROM	KEYWORD2
+loadTrimsFromEEPROM	KEYWORD2
+home	KEYWORD2
+setRestState	KEYWORD2
+getRestState	KEYWORD2
+walk	KEYWORD2
+turn	KEYWORD2
+jump	KEYWORD2
+bend	KEYWORD2
+shakeLeg	KEYWORD2
+updown	KEYWORD2
+swing	KEYWORD2
+tiptoeSwing	KEYWORD2
+jitter	KEYWORD2
+ascendingTurn	KEYWORD2
+moonwalk	KEYWORD2
+crusaito	KEYWORD2
+flapping	KEYWORD2
+dance	KEYWORD2
+kickLeft	KEYWORD2
+kickRight	KEYWORD2
+bendLeft	KEYWORD2
+bendRight	KEYWORD2
+playGesture	KEYWORD2
+initBuzzer	KEYWORD2
+sing	KEYWORD2
+playTone	KEYWORD2
+bendTone	KEYWORD2
+clearBuzzer	KEYWORD2
+moveServos	KEYWORD2
+oscillate	KEYWORD2
+execute	KEYWORD2
+getDistance	KEYWORD2
+getNoise	KEYWORD2
+attach	KEYWORD2
+detach	KEYWORD2
+setParameters	KEYWORD2
+refresh	KEYWORD2
+setPosition	KEYWORD2
+getPosition	KEYWORD2
+setTrim	KEYWORD2
+getTrim	KEYWORD2
+stop	KEYWORD2
+reset	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+Happy	LITERAL1
+SuperHappy	LITERAL1
+Sad	LITERAL1
+Sleeping	LITERAL1
+Fart	LITERAL1
+Confused	LITERAL1
+Love	LITERAL1
+Angry	LITERAL1
+Fretful	LITERAL1
+Magic	LITERAL1
+Wave	LITERAL1
+Victory	LITERAL1
+Fail	LITERAL1
+S_connection	LITERAL1
+S_disconnection	LITERAL1
+S_buttonPushed	LITERAL1
+S_mode1	LITERAL1
+S_mode2	LITERAL1
+S_mode3	LITERAL1
+S_surprise	LITERAL1
+S_OhOoh	LITERAL1
+S_OhOoh2	LITERAL1
+S_cuddly	LITERAL1
+S_sleeping	LITERAL1
+S_happy	LITERAL1
+S_superHappy	LITERAL1
+S_happy_short	LITERAL1
+S_sad	LITERAL1
+S_confused	LITERAL1
+S_fart1	LITERAL1
+S_fart2	LITERAL1
+S_fart3	LITERAL1

@@ -1,0 +1,24 @@
+#######################################
+# Syntax Coloring Map For DigiCodeWheel
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+DigiCodeWheel	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+init	KEYWORD2
+forward	KEYWORD2
+backward	KEYWORD2
+turnLeft	KEYWORD2
+turnRight	KEYWORD2
+spinLeft	KEYWORD2
+spinRight	KEYWORD2
+stop	KEYWORD2
+setMotorSpeed	KEYWORD2
+move	KEYWORD2

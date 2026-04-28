@@ -1,0 +1,51 @@
+#######################################
+# Syntax Coloring Map For DigiCodeTransform
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+DigiCodeTransform	KEYWORD1
+TransformOscillator	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+init	KEYWORD2
+setMode	KEYWORD2
+transform	KEYWORD2
+getMode	KEYWORD2
+alignAngle	KEYWORD2
+calibrate	KEYWORD2
+setTrims	KEYWORD2
+home	KEYWORD2
+walk	KEYWORD2
+walkPower	KEYWORD2
+turn	KEYWORD2
+trot	KEYWORD2
+pushUp	KEYWORD2
+lateral	KEYWORD2
+dance	KEYWORD2
+roll	KEYWORD2
+rollPower	KEYWORD2
+rollRotate	KEYWORD2
+stop	KEYWORD2
+moveServos	KEYWORD2
+attach	KEYWORD2
+detach	KEYWORD2
+setParameters	KEYWORD2
+refresh	KEYWORD2
+setPosition	KEYWORD2
+getPosition	KEYWORD2
+setTrim	KEYWORD2
+getTrim	KEYWORD2
+reset	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+MODE_WALK	LITERAL1
+MODE_ROLL	LITERAL1

@@ -1,0 +1,25 @@
+# Sample docker-compose for DigiCode local compile.
+# Pull the image and start: `docker compose -f docker-compose.local.yml up -d`
+# Then in DigiCode UI: settings -> compile server -> URL = http://localhost:3001
+services:
+  digicode-compile-api:
+    image: ghcr.io/fablab-westharima/digicode-compile-api:latest
+    container_name: digicode-compile-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+    volumes:
+      - digicode-projects:/opt/digicode-compile/projects
+      - digicode-cache:/opt/digicode-compile/cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  digicode-projects:
+  digicode-cache:

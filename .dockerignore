@@ -1,0 +1,6 @@
+node_modules
+.pio
+.git
+*.log
+.DS_Store
+dist
