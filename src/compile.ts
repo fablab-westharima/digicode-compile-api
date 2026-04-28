@@ -1,22 +1,33 @@
 /**
  * compile.ts — Core compile flow.
  *
+ * Phase 3 architecture (44.md §5.4):
  *   1. Resolve FQBN → PlatformIO target (boards.ts)
  *   2. Load .ino template + inject user code (inject.ts)
- *   3. Materialize a tmp PlatformIO project (platformio.ini + src/main.ino)
- *   4. Spawn `pio run`
- *   5. Read firmware.bin (+ bootloader/partitions/boot_app0 for ESP32 fullPackage)
- *   6. Cleanup tmp dir
+ *   3. Compute SHA-256 cache key (cache.ts)
+ *   4. Cache lookup → HIT returns immediately (~50 ms)
+ *   5. Cache MISS: serialize per-(board × template) via withLock (projectLock.ts)
+ *   6. Inside lock:
+ *      a. Ensure persistent project dir (projectStore.ts) with current
+ *         platformio.ini and write src/main.ino
+ *      b. Run `pio run` — `.pio/build/<env>/` is preserved across requests so
+ *         source-only edits go through PIO's incremental build path (~2-3 s)
+ *      c. Read firmware.bin (+ bootloader/partitions/boot_app0 for ESP32
+ *         fullPackage)
+ *      d. Cache the result (cache.ts)
+ *   7. Return result. The persistent project is never deleted.
  */
 
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { pioTargetFor } from './boards.js';
+import { cacheGet, cachePut, computeCacheKey } from './cache.js';
 import { injectUserCode, templateNameFor, type ConnectionType } from './inject.js';
+import { ensurePersistentProject, projectKey, writeMainIno } from './projectStore.js';
+import { withLock } from './projectLock.js';
 
 const execP = promisify(exec);
 
@@ -35,9 +46,12 @@ export interface CompileSuccess {
   bootloader?: string; // base64, ESP32 fullPackage only
   partitions?: string; // base64, ESP32 fullPackage only
   bootApp0?: string; // base64, ESP32 fullPackage only
+  /** Wall time of this request. For cache hits this is the lookup latency. */
   durationMs: number;
   template: string;
   pioBoard: string;
+  /** True when the result was served from disk cache. Optional, off by default. */
+  cached?: boolean;
 }
 
 export interface CompileFailure {
@@ -59,6 +73,10 @@ export interface CompileEnv {
   templatesDir: string;
   /** Where DigiCode custom + bundled libs live (volume-mounted, see 44.md §3.6). */
   libsDir: string;
+  /** Where persistent per-(board × template) PIO projects live (Phase 3). */
+  projectsDir: string;
+  /** Where the compile-result blob cache lives (Phase 3). */
+  cacheDir: string;
   /** Per-attempt compile timeout in ms. */
   timeoutMs: number;
   /** Whether the request asked for ESP32 fullPackage (4-file bundle). */
@@ -70,6 +88,8 @@ const DEFAULT_ENV: CompileEnv = {
   pioHome: process.env.PIO_HOME ?? path.join(process.env.HOME ?? '', '.platformio'),
   templatesDir: process.env.TEMPLATES_DIR ?? '/opt/digicode-compile/templates',
   libsDir: process.env.LIBS_DIR ?? '/opt/digicode-compile/libs',
+  projectsDir: process.env.PROJECTS_DIR ?? '/opt/digicode-compile/projects',
+  cacheDir: process.env.CACHE_DIR ?? '/opt/digicode-compile/cache',
   timeoutMs: Number(process.env.COMPILE_TIMEOUT_MS ?? 180_000),
   fullPackage: false,
 };
@@ -160,6 +180,21 @@ function buildLibDeps(libsDir: string, target: { platform: string }): string[] {
   return deps;
 }
 
+function buildPlatformioIni(target: { platform: string; board: string }, libsDir: string): string {
+  const libDeps = buildLibDeps(libsDir, target)
+    .map((dep) => `    ${dep}`)
+    .join('\n');
+  return `[env:${target.board}]
+platform = ${target.platform}
+board = ${target.board}
+framework = arduino
+lib_deps =
+${libDeps}
+build_flags =
+    -DDIGICODE_COMPILE_API
+`;
+}
+
 export async function compile(
   req: CompileRequest,
   envOverride: Partial<CompileEnv> = {},
@@ -182,42 +217,105 @@ export async function compile(
   const template = readFileSync(templatePath, 'utf-8');
   const injected = injectUserCode(template, req);
 
-  const projectDir = mkdtempSync(path.join(tmpdir(), 'digicode-compile-'));
-  try {
-    materializeProject(projectDir, target, injected, env);
-    return await runPio(projectDir, target, templateName, env, start);
-  } catch (e) {
-    return {
-      success: false,
-      error: (e as Error).message,
+  // Cache key includes board + template, so different fullPackage flags
+  // landing on the same source still share the firmware.bin half — the
+  // optional 4-file bundle is rebuilt from the same cached binaries.
+  const cacheKey = computeCacheKey(injected, target.board, templateName);
+
+  // 1. Cache lookup (no lock — different keys must not block each other).
+  const cached = cacheGet(env.cacheDir, cacheKey);
+  if (cached) {
+    // Strip optional fullPackage fields if the caller did not ask for them,
+    // to keep response shape consistent with a fresh non-fullPackage compile.
+    const result: CompileSuccess = {
+      ...cached,
       durationMs: Date.now() - start,
+      cached: true,
     };
-  } finally {
-    rmSync(projectDir, { recursive: true, force: true });
+    if (!env.fullPackage) {
+      delete result.bootloader;
+      delete result.partitions;
+      delete result.bootApp0;
+    }
+    return result;
   }
+
+  // 2. Cache miss: compile under a per-(board × template) lock. Different
+  //    envs run in parallel; identical ones serialize through PIO.
+  const lockKey = projectKey(target.board, templateName);
+  return withLock(lockKey, async () => {
+    // Re-check the cache after acquiring the lock — a parallel request for
+    // the same key may have populated it while we were waiting.
+    const racewinner = cacheGet(env.cacheDir, cacheKey);
+    if (racewinner) {
+      const result: CompileSuccess = {
+        ...racewinner,
+        durationMs: Date.now() - start,
+        cached: true,
+      };
+      if (!env.fullPackage) {
+        delete result.bootloader;
+        delete result.partitions;
+        delete result.bootApp0;
+      }
+      return result;
+    }
+
+    const ini = buildPlatformioIni(target, env.libsDir);
+    const { projectDir } = ensurePersistentProject(
+      env.projectsDir,
+      target.board,
+      templateName,
+      ini,
+    );
+    writeMainIno(projectDir, injected);
+    const result = await runPio(projectDir, target, templateName, env, start);
+    if (result.success) {
+      // Always store the full ESP32 4-file bundle when present, regardless
+      // of `fullPackage` — future requests asking for it can hit cache.
+      cachePut(env.cacheDir, cacheKey, ensureFullEsp32Bundle(result, target, env, projectDir));
+    }
+    return result;
+  });
 }
 
-function materializeProject(
-  projectDir: string,
-  target: ReturnType<typeof pioTargetFor>,
-  sourceInoContent: string,
+/**
+ * If a successful ESP32 build did not include the optional 4-file bundle
+ * (because the caller did not request fullPackage), grab it from the build
+ * dir + framework package anyway so the cached entry is complete. Cheap —
+ * just three small file reads.
+ */
+function ensureFullEsp32Bundle(
+  result: CompileSuccess,
+  target: { platform: string; board: string },
   env: CompileEnv,
-): void {
-  const libDeps = buildLibDeps(env.libsDir, target)
-    .map((dep) => `    ${dep}`)
-    .join('\n');
-  const ini = `[env:${target.board}]
-platform = ${target.platform}
-board = ${target.board}
-framework = arduino
-lib_deps =
-${libDeps}
-build_flags =
-    -DDIGICODE_COMPILE_API
-`;
-  writeFileSync(path.join(projectDir, 'platformio.ini'), ini);
-  mkdirSync(path.join(projectDir, 'src'));
-  writeFileSync(path.join(projectDir, 'src', 'main.ino'), sourceInoContent);
+  projectDir: string,
+): CompileSuccess {
+  if (target.platform !== 'espressif32') return result;
+  if (result.bootloader && result.partitions && result.bootApp0) return result;
+
+  const buildDir = path.join(projectDir, '.pio', 'build', target.board);
+  const enriched = { ...result };
+  const bootloaderPath = path.join(buildDir, 'bootloader.bin');
+  const partitionsPath = path.join(buildDir, 'partitions.bin');
+  const bootApp0Path = path.join(
+    env.pioHome,
+    'packages',
+    'framework-arduinoespressif32',
+    'tools',
+    'partitions',
+    'boot_app0.bin',
+  );
+  if (!enriched.bootloader && existsSync(bootloaderPath)) {
+    enriched.bootloader = readFileSync(bootloaderPath).toString('base64');
+  }
+  if (!enriched.partitions && existsSync(partitionsPath)) {
+    enriched.partitions = readFileSync(partitionsPath).toString('base64');
+  }
+  if (!enriched.bootApp0 && existsSync(bootApp0Path)) {
+    enriched.bootApp0 = readFileSync(bootApp0Path).toString('base64');
+  }
+  return enriched;
 }
 
 async function runPio(
