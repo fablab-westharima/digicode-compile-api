@@ -161,7 +161,7 @@ const ESP32_REGISTRY_LIBS: readonly string[] = [
  * Philhower) core in boards.ts as a fallback. WiFiNINA support is a
  * follow-up task (44.md Phase 4+).
  */
-function buildLibDeps(libsDir: string, target: { platform: string }): string[] {
+export function buildLibDeps(libsDir: string, target: { platform: string }): string[] {
   const deps: string[] = [
     `file://${libsDir}/Adafruit_NeoPixel`,
     ...COMMON_REGISTRY_LIBS,

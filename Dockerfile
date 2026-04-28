@@ -38,8 +38,18 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src/ ./src/
+COPY scripts/ ./scripts/
+
+# Primer pre-warm: DL frameworks + lib tarballs into the image so a fresh
+# container's first compile starts warm. See compile-api/scripts/warmup-pio.ts.
+# The primer is allowed to fail at the compile step — what we keep is the
+# /root/.platformio/ cache populated before the build phase.
+RUN npx tsx scripts/warmup-pio.ts
 
 # Defaults match compile-api/src/compile.ts DEFAULT_ENV. Override via `docker run -e`.
+# COMPILE_TIMEOUT_MS bumped 180s -> 300s in 45.md Phase 2 (Q1 = C):
+# even with primer pre-warm, fresh-container first compile may still pay for
+# lib_deps unpack + initial g++; 5 min is the safety net.
 ENV PORT=3001 \
     PIO_BIN=/usr/local/bin/pio \
     PIO_HOME=/root/.platformio \
@@ -47,7 +57,7 @@ ENV PORT=3001 \
     LIBS_DIR=/opt/digicode-compile/libs \
     PROJECTS_DIR=/opt/digicode-compile/projects \
     CACHE_DIR=/opt/digicode-compile/cache \
-    COMPILE_TIMEOUT_MS=180000
+    COMPILE_TIMEOUT_MS=300000
 
 EXPOSE 3001
 
