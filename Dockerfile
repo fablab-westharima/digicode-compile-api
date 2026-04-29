@@ -17,16 +17,25 @@ RUN pip3 install --no-cache-dir --break-system-packages "platformio==6.1.19"
 # Pre-install PIO platforms used by compile-api/src/boards.ts.
 #   espressif32:  esp32 / esp32-s3 / esp32-c3 / m5stack family / ATOMS3 Lite.
 #   raspberrypi:  Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect (fallback).
-#   pioarduino fork (BUG-059): arduino-esp32 v3.x for ESP32-C6. Pinned via
-#     the GitHub release zip URL — `pio platform install` accepts that, but
-#     not the `<git-url>#<tag>` fragment form (BUG-059 first attempt failed
-#     on commit 0a450d0 with "An error occurred while installing platform").
-#     URL pin must match `PIOARDUINO_PLATFORM` in compile-api/src/boards.ts
-#     and compile-api/scripts/warmup-pio.ts.
 # arduino-mbed is intentionally NOT installed — no FQBN in boards.ts maps to it
 # (Nano RP2040 Connect uses raspberrypi/pico fallback per boards.ts:37-42).
+#
+# pioarduino fork (BUG-059, ESP32-C6) is NOT pre-installed here. Two earlier
+# attempts (commits 0a450d0 git+#tag form, d33cb19 release-zip URL) both
+# failed at this step with `pio platform install ... "An error occurred
+# while installing platform"` after ~1m. The URL is reachable (HTTP 200 via
+# curl), so the failure is in pio's platform installer code path itself —
+# almost certainly because `pio platform install <url>` and `platform =
+# <url>` in platformio.ini are different code paths and pioarduino is only
+# documented to support the latter.
+#
+# Lazy install: warmup-pio.ts emits a C6 primer env whose `platform = <url>`
+# triggers pio's platformio.ini-driven install during `pio run`. That run is
+# wrapped in a try/catch so any C6 install failure does not break the Docker
+# build; the framework + lib tarball cache for esp32 / rp2040 is still
+# populated. Runtime first-time C6 compile may pay the full ~1.5 GB DL cost
+# until that path proves out.
 RUN pio platform install espressif32 raspberrypi \
-        "https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip" \
     && rm -rf /root/.platformio/.cache
 
 # DigiCode custom + version-pinned vendored libs (LIBS_DIR=/opt/digicode-compile/libs).
