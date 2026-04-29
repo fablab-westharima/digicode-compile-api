@@ -12,10 +12,13 @@
 # acceptable on ML30 (~334 GB free disk).
 FROM node:20
 
-# Python deps for pioarduino: PIO Core + extras pioarduino's bundled
-# tool-esptoolpy / espressif32 builder need. The node:20 image already
-# ships python3 + pip + git + curl + ca-certificates, so apt-get is no
-# longer needed.
+# node:20 (full Debian bookworm) ships python3 + git + curl, but does NOT
+# ship pip3 by default — round 6 first attempt tripped over `exit code 127
+# (command not found)` for pip3. Install python3-pip via apt before any
+# pip-driven step.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
 # PlatformIO Core + pioarduino's runtime Python deps (BUG-059 X2 triage,
 # 2026-04-30). pioarduino's espressif32 builder + tool-esptoolpy depend on
