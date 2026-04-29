@@ -218,11 +218,23 @@ function buildPlatformioIni(
   const buildFlags = [...baseFlags, ...(target.extraBuildFlags ?? [])]
     .map((flag) => `    ${flag}`)
     .join('\n');
+  // BUG-059 X2 triage round 7 (2026-04-30): NimBLE-Arduino + the OTA
+  // template's WiFi/HTTP/Update stack push the firmware past the default
+  // ESP32 partition's 1.25 MB app slot (`Error: program size (1400874
+  // bytes) is greater than maximum allowed (1310720 bytes)`).
+  // `min_spiffs.csv` is an arduino-esp32-shipped layout with two 1.9 MB
+  // OTA slots + a small SPIFFS region — enough headroom for NimBLE,
+  // ArduinoHA + WebServer + Update, and any reasonable user code, while
+  // still preserving OTA dual-slot behaviour. RP2040 builds use the
+  // raspberrypi platform's own partition handling (no override).
+  const partitionLine = isEsp32FamilyPlatform(target.platform)
+    ? 'board_build.partitions = min_spiffs.csv\n'
+    : '';
   return `[env:${target.board}]
 platform = ${target.platform}
 board = ${target.board}
 framework = arduino
-; BUG-059 X2 triage round 5 (2026-04-30): pioarduino's default LDF
+${partitionLine}; BUG-059 X2 triage round 5 (2026-04-30): pioarduino's default LDF
 ; behaviour links every lib in lib_deps unconditionally, so
 ; \`miguelbalboa/MFRC522\` and \`arozcan/MFRC522-I2C-Library\` (two
 ; different libraries that both ship a class named MFRC522) collided at
