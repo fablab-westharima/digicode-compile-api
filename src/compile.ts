@@ -142,14 +142,20 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   'https://github.com/arozcan/MFRC522-I2C-Library.git', // MFRC522_I2C: latent fix
 ];
 
-/** ESP32-only libs (platform = espressif32). */
+/** ESP32-only libs (platform = espressif32 / pioarduino). */
 const ESP32_REGISTRY_LIBS: readonly string[] = [
   'dawidchyrzynski/home-assistant-integration@^2.1', // depends on ESP32 WiFi
   'dvarrel/ESPping@^1.0.5',
   'plerup/EspSoftwareSerial@^8.2',
   'crankyoldgit/IRremoteESP8266@^2.8',
   'handmade0octopus/ESP32-TWAI-CAN@^1.0.1',
-  'ecal-mid/ESP32Servo360@^0.1.0',
+  // ESP32Servo360 dropped (BUG-059 X2 triage 2026-04-30):
+  // `ecal-mid/ESP32Servo360@^0.1.0` ships smart-quote characters in its
+  // `#error` directive that arduino-esp32 v3.x's gcc rejects with
+  // "extended character " is not valid in an identifier", which fails
+  // every ESP32 build on the pioarduino image. No DigiCode block
+  // generator emits `#include <ESP32Servo360.h>` (verified by grep), so
+  // the dependency was unused dead weight from BP-era exploration.
 ];
 
 /**
@@ -187,7 +193,19 @@ function buildPlatformioIni(
   const libDeps = buildLibDeps(libsDir, target)
     .map((dep) => `    ${dep}`)
     .join('\n');
-  const buildFlags = ['-DDIGICODE_COMPILE_API', ...(target.extraBuildFlags ?? [])]
+  // BUG-059 X2 triage (2026-04-30): arduino-esp32 v3.x's gcc promotes a
+  // wider set of warnings into errors than v2.x did. Several registry libs
+  // (Adafruit_VL53L0X, ...) emit benign warnings that worked under v2.x
+  // and now fail the build. Quiet these defensively at the env level —
+  // legitimate user-source warnings still surface in the stderr we return.
+  const baseFlags = [
+    '-DDIGICODE_COMPILE_API',
+    '-Wno-error',
+    '-Wno-deprecated-declarations',
+    '-Wno-unused-but-set-variable',
+    '-Wno-unused-variable',
+  ];
+  const buildFlags = [...baseFlags, ...(target.extraBuildFlags ?? [])]
     .map((flag) => `    ${flag}`)
     .join('\n');
   return `[env:${target.board}]
