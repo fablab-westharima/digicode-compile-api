@@ -8,34 +8,29 @@
  */
 
 /**
- * pioarduino fork pin (BUG-059, 2026-04-29).
+ * BUG-059 deferred (2026-04-30, post-rollback).
  *
- * The official `platformio/espressif32@6.13.0` ships arduino-esp32 v2.0.17,
- * which does NOT support ESP32-C6 / C5 / H2 / P4 with the arduino framework
- * (PIO env validation rejects with "This board doesn't support arduino
- * framework!"). The community fork `pioarduino/platform-espressif32` tracks
- * arduino-esp32 v3.x and adds those SoCs.
+ * The "C6-only pioarduino" approach proved structurally impossible: the
+ * pioarduino fork's platform.json declares `"name": "espressif32"`, the
+ * same name as the official platform. PIO's package store keys platforms
+ * by name, so installing pioarduino *replaces* the official espressif32
+ * registration globally — and pioarduino's builder imports `yaml` (not in
+ * the container's Python deps), causing every ESP32 compile to fail with
+ * `ModuleNotFoundError: No module named 'yaml'` (commit f98274a deploy
+ * confirmed this regression). Build #6 image was rolled back.
  *
- * Tag `54.03.21` (Arduino v3.2.1 / ESP-IDF v5.4.2) was selected over the
- * latest `55.03.38-1` because:
- *   - M5Stack's official Stamp-P4 docs pin to this exact tag (production-
- *     tested for Factory Scientist course requirements; see
- *     https://docs.m5stack.com/en/core/Stamp-P4)
- *   - v3.2.1 fully covers C6 (cluster #14, 14 cases / +1.4pp) without
- *     incurring v3.3.x changes that have not been tested against the
- *     vendored libs (NimBLE-Arduino v2.4.0, DigiCodeHumanoid, ...).
+ * Re-architecture options live in `prompt/maintenance/発見バグ/2026-04-29_059_*.md`:
+ *   X1 — fork + rename pioarduino's platform name; high maintenance.
+ *   X2 — full arduino-esp32 v3.x migration; ~4–8 h, every ESP32 board
+ *        needs regression coverage (vendored libs untested vs. v3.x).
+ *   X3 — drop C6 / xiao-esp32c6 from boardStore (this commit hides them
+ *        from the picker so users do not see broken hardware) and
+ *        revisit when one of X1 / X2 is feasible.
  *
- * URL format: pioarduino's own install instructions use the GitHub release
- * zip URL — this is the form `pio platform install` accepts on the CLI and
- * the `platform = ...` line in platformio.ini both consume. The earlier
- * `git+url#tag` form worked in platformio.ini but failed `pio platform
- * install` (build-time pre-install in Dockerfile blew up on this).
- *
- * Scoped to C6 family only — every other ESP32 board stays on the official
- * `espressif32` platform so existing builds are unchanged.
+ * Until then, C6 entries route to the official `espressif32` (same as
+ * before BUG-059) so existing builds stay green; the C6 boards
+ * themselves are hidden in the frontend (`stores/boardStore.ts`).
  */
-const PIOARDUINO_PLATFORM =
-  'https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip';
 
 export interface PioTarget {
   /** PlatformIO `platform` field. */
@@ -51,14 +46,13 @@ export const FQBN_TO_PIO: Record<string, PioTarget> = {
   'esp32:esp32:esp32': { platform: 'espressif32', board: 'esp32dev' },
   'esp32:esp32:esp32s3': { platform: 'espressif32', board: 'esp32-s3-devkitc-1' },
   'esp32:esp32:esp32c3': { platform: 'espressif32', board: 'esp32-c3-devkitm-1' },
-  // ESP32-C6 routes through the pioarduino fork (BUG-059) — the official
-  // platform's arduino-esp32 v2.x does not support C6.
-  'esp32:esp32:esp32c6': { platform: PIOARDUINO_PLATFORM, board: 'esp32-c6-devkitm-1' },
-  // NOTE (deferred): a Seeed-specific FQBN `seeed:esp32:xiao_esp32c6` →
-  // PIO board id `seeed_xiao_esp32c6` would let xiao-esp32c6 hit the
-  // Seeed-tuned pin defaults. Currently `boardStore.ts:203` aliases
-  // xiao-esp32c6 to the same `esp32:esp32:esp32c6` FQBN, so the C6 fix
-  // here covers both. Splitting the FQBN is a separate Phase.
+  // ESP32-C6: official `espressif32@6.13.0` ships arduino-esp32 v2.x which
+  // does NOT support C6. Compiles fail at PIO env validation with "This
+  // board doesn't support arduino framework!". Frontend hides this board
+  // (BUG-059 X3) so users never select it; the mapping stays here so any
+  // probabilistic-debug case still resolves through pioTargetFor() and
+  // exercises the existing failure path.
+  'esp32:esp32:esp32c6': { platform: 'espressif32', board: 'esp32-c6-devkitm-1' },
   // M5Stack
   'm5stack:esp32:m5stack_core': { platform: 'espressif32', board: 'm5stack-core-esp32' },
   // M5StickC Plus has no PIO espressif32 board ID; fall back to base m5stick-c.

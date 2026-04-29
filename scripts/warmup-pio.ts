@@ -39,22 +39,16 @@ interface PrimerEnv {
   board: string;
 }
 
-// URL pin must match `PIOARDUINO_PLATFORM` in compile-api/src/boards.ts and
-// the `pio platform install` line in compile-api/Dockerfile. Updating any
-// one without the others will leave the runtime resolving a different
-// platform than the image preloaded, defeating the primer.
-const PIOARDUINO_PLATFORM =
-  'https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip';
-
+// BUG-059 deferred (2026-04-30): the pioarduino C6 primer was removed
+// because pioarduino's platform.json registers as `name=espressif32`,
+// silently replacing the official platform on install and breaking every
+// ESP32 build (yaml import in pioarduino's builder, not in the container's
+// Python deps). See compile-api/src/boards.ts header comment for the
+// re-architecture options. Until that is sorted, only the two official
+// platforms primer here.
 const PRIMER_ENVS: readonly PrimerEnv[] = [
   { envName: 'esp32_primer', platform: 'espressif32', board: 'esp32dev' },
   { envName: 'rp2040_primer', platform: 'raspberrypi', board: 'pico' },
-  // BUG-059: pioarduino primer for the C6 family. Pre-DLs the v3.x
-  // arduino-esp32 framework + ESP32-only lib tarballs into the image so a
-  // fresh container's first C6 compile starts warm. Without this primer
-  // the cold path can blow past COMPILE_TIMEOUT_MS=300000 on the bigger
-  // arduino-esp32 v3.x download.
-  { envName: 'esp32c6_primer', platform: PIOARDUINO_PLATFORM, board: 'esp32-c6-devkitm-1' },
 ];
 
 const PRIMER_MAIN_CPP = `// Minimal source — primer's job is to fill ~/.platformio/, not produce artifacts.
