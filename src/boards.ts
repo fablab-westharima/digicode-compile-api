@@ -56,8 +56,15 @@ export const FQBN_TO_PIO: Record<string, PioTarget> = {
   'esp32:esp32:esp32s3': { platform: PIOARDUINO_PLATFORM, board: 'esp32-s3-devkitc-1' },
   'esp32:esp32:esp32c3': { platform: PIOARDUINO_PLATFORM, board: 'esp32-c3-devkitm-1' },
   'esp32:esp32:esp32c6': { platform: PIOARDUINO_PLATFORM, board: 'esp32-c6-devkitm-1' },
-  // M5Stack
-  'm5stack:esp32:m5stack_core': { platform: PIOARDUINO_PLATFORM, board: 'm5stack-core-esp32' },
+  // M5Stack — Basic / Gray / Fire share the same pinout, so we route all of
+  // them through pioarduino's `m5stack-fire` board id. The more obvious
+  // `m5stack-core-esp32` board.json declares `variant=m5stack_core_esp32`,
+  // but pioarduino's variants/ directory only ships `m5stack_core` (no
+  // `_esp32` suffix); compiles fail with `pins_arduino.h: No such file or
+  // directory`. m5stack-fire's variant `m5stack_fire` exists and uses the
+  // same physical pin assignments — only PSRAM / IMU presence differs at
+  // runtime, which is irrelevant for compile correctness.
+  'm5stack:esp32:m5stack_core': { platform: PIOARDUINO_PLATFORM, board: 'm5stack-fire' },
   // M5StickC Plus has no espressif32 board ID; fall back to base m5stick-c.
   // User-side M5StickCPlus library handles screen/battery diff at runtime.
   'm5stack:esp32:m5stick_c_plus': { platform: PIOARDUINO_PLATFORM, board: 'm5stick-c' },
