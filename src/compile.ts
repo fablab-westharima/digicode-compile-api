@@ -212,6 +212,17 @@ function buildPlatformioIni(
 platform = ${target.platform}
 board = ${target.board}
 framework = arduino
+; BUG-059 X2 triage round 5 (2026-04-30): pioarduino's default LDF
+; behaviour links every lib in lib_deps unconditionally, so
+; \`miguelbalboa/MFRC522\` and \`arozcan/MFRC522-I2C-Library\` (two
+; different libraries that both ship a class named MFRC522) collided at
+; the linker stage on every ESP32 build with "multiple definition of
+; _ZN7MFRC522..." even when the user source did not #include either
+; one. \`chain\` (one of PIO's stricter LDF modes) only pulls libs that
+; the user source actually #includes, so unused lib_deps stop fighting
+; over symbols. Default in PIO docs is "chain", but pioarduino appears to
+; override with a deeper mode — this line forces it back.
+lib_ldf_mode = chain
 lib_deps =
 ${libDeps}
 build_flags =
