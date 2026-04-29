@@ -23,7 +23,7 @@ import { promisify } from 'node:util';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { pioTargetFor } from './boards.js';
+import { isEsp32FamilyPlatform, pioTargetFor } from './boards.js';
 import { cacheGet, cachePut, computeCacheKey } from './cache.js';
 import { injectUserCode, templateNameFor, type ConnectionType } from './inject.js';
 import { ensurePersistentProject, projectKey, writeMainIno } from './projectStore.js';
@@ -166,7 +166,7 @@ export function buildLibDeps(libsDir: string, target: { platform: string }): str
     `file://${libsDir}/Adafruit_NeoPixel`,
     ...COMMON_REGISTRY_LIBS,
   ];
-  if (target.platform === 'espressif32') {
+  if (isEsp32FamilyPlatform(target.platform)) {
     deps.push(
       `file://${libsDir}/DigiCodeHumanoid`,
       `file://${libsDir}/DigiCodeTransform`,
@@ -180,9 +180,15 @@ export function buildLibDeps(libsDir: string, target: { platform: string }): str
   return deps;
 }
 
-function buildPlatformioIni(target: { platform: string; board: string }, libsDir: string): string {
+function buildPlatformioIni(
+  target: { platform: string; board: string; extraBuildFlags?: string[] },
+  libsDir: string,
+): string {
   const libDeps = buildLibDeps(libsDir, target)
     .map((dep) => `    ${dep}`)
+    .join('\n');
+  const buildFlags = ['-DDIGICODE_COMPILE_API', ...(target.extraBuildFlags ?? [])]
+    .map((flag) => `    ${flag}`)
     .join('\n');
   return `[env:${target.board}]
 platform = ${target.platform}
@@ -191,7 +197,7 @@ framework = arduino
 lib_deps =
 ${libDeps}
 build_flags =
-    -DDIGICODE_COMPILE_API
+${buildFlags}
 `;
 }
 
@@ -220,7 +226,13 @@ export async function compile(
   // Cache key includes board + template, so different fullPackage flags
   // landing on the same source still share the firmware.bin half — the
   // optional 4-file bundle is rebuilt from the same cached binaries.
-  const cacheKey = computeCacheKey(injected, target.board, templateName);
+  const cacheKey = computeCacheKey(
+    injected,
+    target.board,
+    templateName,
+    target.platform,
+    target.extraBuildFlags,
+  );
 
   // 1. Cache lookup (no lock — different keys must not block each other).
   const cached = cacheGet(env.cacheDir, cacheKey);
@@ -291,7 +303,7 @@ function ensureFullEsp32Bundle(
   env: CompileEnv,
   projectDir: string,
 ): CompileSuccess {
-  if (target.platform !== 'espressif32') return result;
+  if (!isEsp32FamilyPlatform(target.platform)) return result;
   if (result.bootloader && result.partitions && result.bootApp0) return result;
 
   const buildDir = path.join(projectDir, '.pio', 'build', target.board);
@@ -353,7 +365,7 @@ async function runPio(
       pioBoard: target.board,
     };
 
-    if (env.fullPackage && target.platform === 'espressif32') {
+    if (env.fullPackage && isEsp32FamilyPlatform(target.platform)) {
       const bootloaderPath = path.join(buildDir, 'bootloader.bin');
       const partitionsPath = path.join(buildDir, 'partitions.bin');
       const bootApp0Path = path.join(
