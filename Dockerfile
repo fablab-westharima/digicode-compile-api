@@ -27,12 +27,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # PATH; the duplication adds <10 MB and removes an entire class of
 # missing-dep bug. pyyaml / jsonschema stay explicit because they're not
 # pulled by esptool.
+#
+# `click<8.2` (BUG-059 X2 triage round 4): click 8.2 removed the optional
+# `ctx` parameter on `ParamType.get_metavar()` (pioarduino's
+# tool-esptoolpy/esptool/cli_util.py:295 calls the no-arg form). Pinning
+# below 8.2 keeps the older signature so the bundled CLI initialises.
 # Debian bookworm sets PEP 668 EXTERNALLY-MANAGED; the container has no
 # other Python user, so --break-system-packages is the documented escape.
 RUN pip3 install --no-cache-dir --break-system-packages \
         "platformio==6.1.19" \
         "pyyaml" \
         "jsonschema" \
+        "click<8.2" \
         "esptool"
 
 # Pre-install raspberrypi (Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect
