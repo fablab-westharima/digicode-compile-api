@@ -2,12 +2,20 @@
 # Replaces legacy ghcr.io/fablab-westharima/digicode-compile-server (arduino-cli).
 # Plan: prompt/maintenance/45_2026-04-28_ローカルコンパイルPIO統一計画.md Phase 1.
 
-FROM node:20-slim
+# BUG-059 X2 triage round 6 (2026-04-30): switch from node:20-slim to
+# the full node:20 (Debian bookworm). The slim variant is missing
+# build-essential / git / curl in many cases, and we already pip-install
+# multiple Python deps to satisfy pioarduino's tool chain (round 1-4
+# whack-a-mole). The full image lands closer to a real-world dev
+# environment, which removes a class of "package not present" surprises
+# without changing pioarduino's actual behaviour. ~+800 MB image size is
+# acceptable on ML30 (~334 GB free disk).
+FROM node:20
 
-# System deps for PlatformIO Core + git URL lib pinning.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-pip python3-venv git curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Python deps for pioarduino: PIO Core + extras pioarduino's bundled
+# tool-esptoolpy / espressif32 builder need. The node:20 image already
+# ships python3 + pip + git + curl + ca-certificates, so apt-get is no
+# longer needed.
 
 # PlatformIO Core + pioarduino's runtime Python deps (BUG-059 X2 triage,
 # 2026-04-30). pioarduino's espressif32 builder + tool-esptoolpy depend on
