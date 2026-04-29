@@ -10,21 +10,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # PlatformIO Core + pioarduino's runtime Python deps (BUG-059 X2 triage,
-# 2026-04-30). pioarduino's espressif32 builder + tool-esptoolpy depend on:
-#   - yaml (builder/frameworks/component_manager.py:14)
-#   - jsonschema (a couple of build-time helpers)
-#   - rich_click (tool-esptoolpy/esptool/__init__.py:41 — needed for the
-#     bootloader.bin generation step; missing this surfaces only after a
-#     full compile + link, identical to BUG-059 round-1 smoke)
-# All three are absent from node:20-slim's default Python environment.
+# 2026-04-30). pioarduino's espressif32 builder + tool-esptoolpy depend on
+# Python packages that are absent from node:20-slim's default environment:
+#   - yaml          → builder/frameworks/component_manager.py:14
+#   - jsonschema    → a couple of build-time helpers
+#   - rich_click    → tool-esptoolpy/esptool/__init__.py:41
+#   - intelhex      → tool-esptoolpy/esptool/cmds.py:15
+#   - (likely more) → cryptography, pyserial, ecdsa, ...
+# Rather than playing whack-a-mole with each round's missing-module surface
+# (rich_click in round 1, intelhex in round 2, ...), pull the full upstream
+# `esptool` distribution — its setup.cfg dependencies (intelhex,
+# cryptography, ecdsa, pyserial, reedsolo, bitstring, rich_click, ...) all
+# install into /usr/local/lib/python3.11/dist-packages where pioarduino's
+# bundled tool-esptoolpy/esptool.py resolves them. The pip-installed
+# esptool wheel sits alongside but tool-esptoolpy continues to win on
+# PATH; the duplication adds <10 MB and removes an entire class of
+# missing-dep bug. pyyaml / jsonschema stay explicit because they're not
+# pulled by esptool.
 # Debian bookworm sets PEP 668 EXTERNALLY-MANAGED; the container has no
-# other Python user, so --break-system-packages is the documented escape
-# valve.
+# other Python user, so --break-system-packages is the documented escape.
 RUN pip3 install --no-cache-dir --break-system-packages \
         "platformio==6.1.19" \
         "pyyaml" \
         "jsonschema" \
-        "rich_click"
+        "esptool"
 
 # Pre-install raspberrypi (Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect
 # fallback). The pioarduino fork now drives every ESP32 target — see
