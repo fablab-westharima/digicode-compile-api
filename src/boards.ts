@@ -8,7 +8,7 @@
  */
 
 /**
- * pioarduino fork tag pin (BUG-059, 2026-04-29).
+ * pioarduino fork pin (BUG-059, 2026-04-29).
  *
  * The official `platformio/espressif32@6.13.0` ships arduino-esp32 v2.0.17,
  * which does NOT support ESP32-C6 / C5 / H2 / P4 with the arduino framework
@@ -16,8 +16,8 @@
  * framework!"). The community fork `pioarduino/platform-espressif32` tracks
  * arduino-esp32 v3.x and adds those SoCs.
  *
- * `54.03.21` (Arduino v3.2.1 / ESP-IDF v5.4.2) was selected over the latest
- * `55.03.38-1` because:
+ * Tag `54.03.21` (Arduino v3.2.1 / ESP-IDF v5.4.2) was selected over the
+ * latest `55.03.38-1` because:
  *   - M5Stack's official Stamp-P4 docs pin to this exact tag (production-
  *     tested for Factory Scientist course requirements; see
  *     https://docs.m5stack.com/en/core/Stamp-P4)
@@ -25,11 +25,17 @@
  *     incurring v3.3.x changes that have not been tested against the
  *     vendored libs (NimBLE-Arduino v2.4.0, DigiCodeHumanoid, ...).
  *
+ * URL format: pioarduino's own install instructions use the GitHub release
+ * zip URL — this is the form `pio platform install` accepts on the CLI and
+ * the `platform = ...` line in platformio.ini both consume. The earlier
+ * `git+url#tag` form worked in platformio.ini but failed `pio platform
+ * install` (build-time pre-install in Dockerfile blew up on this).
+ *
  * Scoped to C6 family only — every other ESP32 board stays on the official
  * `espressif32` platform so existing builds are unchanged.
  */
 const PIOARDUINO_PLATFORM =
-  'https://github.com/pioarduino/platform-espressif32.git#54.03.21';
+  'https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip';
 
 export interface PioTarget {
   /** PlatformIO `platform` field. */

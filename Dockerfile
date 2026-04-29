@@ -17,14 +17,16 @@ RUN pip3 install --no-cache-dir --break-system-packages "platformio==6.1.19"
 # Pre-install PIO platforms used by compile-api/src/boards.ts.
 #   espressif32:  esp32 / esp32-s3 / esp32-c3 / m5stack family / ATOMS3 Lite.
 #   raspberrypi:  Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect (fallback).
-#   pioarduino fork (BUG-059): arduino-esp32 v3.x for ESP32-C6. Tag pin
-#     `54.03.21` must match `PIOARDUINO_PLATFORM` in compile-api/src/boards.ts
-#     and compile-api/scripts/warmup-pio.ts; updating one without the other
-#     leaves a stale platform on disk.
+#   pioarduino fork (BUG-059): arduino-esp32 v3.x for ESP32-C6. Pinned via
+#     the GitHub release zip URL — `pio platform install` accepts that, but
+#     not the `<git-url>#<tag>` fragment form (BUG-059 first attempt failed
+#     on commit 0a450d0 with "An error occurred while installing platform").
+#     URL pin must match `PIOARDUINO_PLATFORM` in compile-api/src/boards.ts
+#     and compile-api/scripts/warmup-pio.ts.
 # arduino-mbed is intentionally NOT installed — no FQBN in boards.ts maps to it
 # (Nano RP2040 Connect uses raspberrypi/pico fallback per boards.ts:37-42).
 RUN pio platform install espressif32 raspberrypi \
-        "https://github.com/pioarduino/platform-espressif32.git#54.03.21" \
+        "https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip" \
     && rm -rf /root/.platformio/.cache
 
 # DigiCode custom + version-pinned vendored libs (LIBS_DIR=/opt/digicode-compile/libs).

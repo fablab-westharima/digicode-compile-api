@@ -39,11 +39,12 @@ interface PrimerEnv {
   board: string;
 }
 
-// Tag pin must match `PIOARDUINO_PLATFORM` in compile-api/src/boards.ts.
-// Updating one without the other will cause a fresh container's first C6
-// compile to pay the full framework + lib_deps DL cost.
+// URL pin must match `PIOARDUINO_PLATFORM` in compile-api/src/boards.ts and
+// the `pio platform install` line in compile-api/Dockerfile. Updating any
+// one without the others will leave the runtime resolving a different
+// platform than the image preloaded, defeating the primer.
 const PIOARDUINO_PLATFORM =
-  'https://github.com/pioarduino/platform-espressif32.git#54.03.21';
+  'https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip';
 
 const PRIMER_ENVS: readonly PrimerEnv[] = [
   { envName: 'esp32_primer', platform: 'espressif32', board: 'esp32dev' },
