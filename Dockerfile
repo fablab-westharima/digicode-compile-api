@@ -9,33 +9,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# PlatformIO Core, system-wide. Debian bookworm sets PEP 668 EXTERNALLY-MANAGED;
-# the container has no other Python user, so --break-system-packages is the
-# documented escape valve. Pinned to match what ML30 host runtime uses today.
-RUN pip3 install --no-cache-dir --break-system-packages "platformio==6.1.19"
+# PlatformIO Core + pioarduino's runtime Python deps (BUG-059 X2,
+# 2026-04-30). pioarduino's espressif32 builder imports `yaml` (e.g.
+# builder/frameworks/component_manager.py:14) and a few helpers do JSON
+# Schema validation; both are absent from the slim image's default Python
+# environment, so we pre-install pyyaml + jsonschema alongside platformio.
+# Debian bookworm sets PEP 668 EXTERNALLY-MANAGED; the container has no
+# other Python user, so --break-system-packages is the documented escape
+# valve.
+RUN pip3 install --no-cache-dir --break-system-packages \
+        "platformio==6.1.19" \
+        "pyyaml" \
+        "jsonschema"
 
-# Pre-install PIO platforms used by compile-api/src/boards.ts.
-#   espressif32:  esp32 / esp32-s3 / esp32-c3 / m5stack family / ATOMS3 Lite.
-#   raspberrypi:  Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect (fallback).
-# arduino-mbed is intentionally NOT installed — no FQBN in boards.ts maps to it
-# (Nano RP2040 Connect uses raspberrypi/pico fallback per boards.ts:37-42).
-#
-# pioarduino fork (BUG-059, ESP32-C6) is NOT pre-installed here. Two earlier
-# attempts (commits 0a450d0 git+#tag form, d33cb19 release-zip URL) both
-# failed at this step with `pio platform install ... "An error occurred
-# while installing platform"` after ~1m. The URL is reachable (HTTP 200 via
-# curl), so the failure is in pio's platform installer code path itself —
-# almost certainly because `pio platform install <url>` and `platform =
-# <url>` in platformio.ini are different code paths and pioarduino is only
-# documented to support the latter.
-#
-# Lazy install: warmup-pio.ts emits a C6 primer env whose `platform = <url>`
-# triggers pio's platformio.ini-driven install during `pio run`. That run is
-# wrapped in a try/catch so any C6 install failure does not break the Docker
-# build; the framework + lib tarball cache for esp32 / rp2040 is still
-# populated. Runtime first-time C6 compile may pay the full ~1.5 GB DL cost
-# until that path proves out.
-RUN pio platform install espressif32 raspberrypi \
+# Pre-install raspberrypi (Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect
+# fallback). The pioarduino fork now drives every ESP32 target — see
+# compile-api/src/boards.ts — but installing it via `pio platform install
+# <url>` blew up in two prior attempts (git+#tag and release-zip URLs both
+# returned "An error occurred while installing platform" inside pio's
+# installer code path). The platformio.ini-driven `platform = <url>` route
+# in warmup-pio.ts succeeds, so pioarduino is intentionally lazy-installed
+# from there. arduino-mbed is intentionally NOT installed — no FQBN in
+# boards.ts maps to it (Nano RP2040 Connect uses raspberrypi/pico fallback).
+RUN pio platform install raspberrypi \
     && rm -rf /root/.platformio/.cache
 
 # DigiCode custom + version-pinned vendored libs (LIBS_DIR=/opt/digicode-compile/libs).

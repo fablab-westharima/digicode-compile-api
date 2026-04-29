@@ -39,15 +39,23 @@ interface PrimerEnv {
   board: string;
 }
 
-// BUG-059 deferred (2026-04-30): the pioarduino C6 primer was removed
-// because pioarduino's platform.json registers as `name=espressif32`,
-// silently replacing the official platform on install and breaking every
-// ESP32 build (yaml import in pioarduino's builder, not in the container's
-// Python deps). See compile-api/src/boards.ts header comment for the
-// re-architecture options. Until that is sorted, only the two official
-// platforms primer here.
+// BUG-059 X2 (2026-04-30): pioarduino is the canonical ESP32 platform.
+// Mirror compile-api/src/boards.ts — same URL pin, same arduino-esp32
+// release. `pio platform install <url>` rejects this URL form, so the
+// only reliable install path is letting `pio run` resolve `platform =
+// <url>` from a primer's platformio.ini at image build time. Updating
+// the URL here without updating boards.ts (or vice versa) leaves the
+// runtime resolving a different platform than the image preloaded,
+// defeating the primer.
+const PIOARDUINO_PLATFORM =
+  'https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip';
+
 const PRIMER_ENVS: readonly PrimerEnv[] = [
-  { envName: 'esp32_primer', platform: 'espressif32', board: 'esp32dev' },
+  // Pioarduino covers every ESP32 SoC we care about (esp32, S3, C3, C6,
+  // P4, ...). One primer env is enough — the framework + lib_deps tarball
+  // mix lands in /root/.platformio/.cache and is reused by every runtime
+  // ESP32 compile regardless of board.
+  { envName: 'esp32_primer', platform: PIOARDUINO_PLATFORM, board: 'esp32dev' },
   { envName: 'rp2040_primer', platform: 'raspberrypi', board: 'pico' },
 ];
 
