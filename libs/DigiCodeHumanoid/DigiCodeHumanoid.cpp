@@ -288,6 +288,13 @@ void DigiCodeHumanoid::swing(int steps, int period, int height) {
     _execute(amplitude, offset, period, phase, steps);
 }
 
+// BUG-071: 2-arg overload matching the DigiCode `humanoid_swing` block emit.
+// Foot amplitude defaults to 20 degrees — a safe value for OTTO-class humanoid
+// servos (the 3-arg implementation drives the foot servos directly with this).
+void DigiCodeHumanoid::swing(int steps, int period) {
+    swing(steps, period, 20);
+}
+
 void DigiCodeHumanoid::tiptoeSwing(int steps, int period, int height) {
     int amplitude[4] = {0, 0, height, height};
     int offset[4] = {0, 0, height / 2, -height / 2};
@@ -330,6 +337,13 @@ void DigiCodeHumanoid::moonwalk(int steps, int period, int height, int direction
     }
 
     _execute(amplitude, offset, period, phase, steps);
+}
+
+// BUG-071: 3-arg overload matching the DigiCode `humanoid_moonwalk` block
+// emit. Foot amplitude defaults to 25 degrees — the same value the canonical
+// implementation uses for the leg amplitude, giving symmetric leg/foot motion.
+void DigiCodeHumanoid::moonwalk(int steps, int period, int direction) {
+    moonwalk(steps, period, 25, direction);
 }
 
 void DigiCodeHumanoid::crusaito(int steps, int period, int height, int direction) {

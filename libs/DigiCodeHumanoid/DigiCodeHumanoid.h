@@ -117,6 +117,13 @@ public:
     void crusaito(int steps, int period, int height, int direction);
     void flapping(int steps, int period, int height, int direction);
 
+    // BUG-071: backward-compatible overloads matching the DigiCode block
+    // generator emit shape (steps + period only / + direction). Block design
+    // intentionally hides `height` from the user; these overloads carry the
+    // safe-default amplitude into the canonical 3-arg / 4-arg implementations.
+    void swing(int steps, int period);
+    void moonwalk(int steps, int period, int direction);
+
     // Dance shortcuts
     void dance(int steps, int period);
     void kickLeft(int steps, int period);
