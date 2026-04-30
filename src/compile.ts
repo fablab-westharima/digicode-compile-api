@@ -238,6 +238,14 @@ ${partitionLine}; BUG-059 X2 triage round 5 (2026-04-30): pioarduino's default L
 ; over symbols. Default in PIO docs is "chain", but pioarduino appears to
 ; override with a deeper mode — this line forces it back.
 lib_ldf_mode = chain
+; BUG-068 (2026-04-30): user code emitting #include <SD.h> causes PIO LDF to
+; transitively pull arduino-libraries/SD@1.x from the registry, which ships
+; Sd2Card.h / SdFat.h / SdFile.cpp and fails ESP32 with
+; "#error Architecture or board not supported." The arduino-esp32 framework
+; ships its own SD library at framework-arduinoespressif32/libraries/SD with
+; a compatible API (SD.begin / SD.open / File / fs::FS); ignoring the
+; registry entry lets the framework-shipped one resolve in its place.
+lib_ignore = SD
 lib_deps =
 ${libDeps}
 build_flags =
