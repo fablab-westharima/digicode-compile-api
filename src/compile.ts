@@ -135,21 +135,14 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   'dfrobot/DFRobotDFPlayerMini@^1.0.6',
   'robtillaart/AS5600@^0.6',
   'marcoschwartz/LiquidCrystal_I2C@^1.1.4',
-  // 'miguelbalboa/MFRC522@^1.4.12',  // dropped in BUG-059 X2 triage round 6 — see comment below
   'pololu/QTRSensors@^4', // latent fix: legacy Dockerfile missed this. Latest is v4.0.0 (2019).
   'teckel12/NewPing@^1.9', // bundled libs/NewPing is v1.5 AVR-only; registry has ESP32 support
-  'https://github.com/MakerSpaceLeiden/rfid#1.5.1', // MFRC522-spi-i2c-uart-async
-  // BUG-059 X2 triage round 6 (2026-04-30): the dual MFRC522 entries
-  // (`miguelbalboa/MFRC522` + `arozcan/MFRC522-I2C-Library`) both ship a
-  // class named `MFRC522` and collide at the linker stage on every
-  // ESP32 build, even when user code does not #include either header.
-  // pioarduino's link path apparently forces both libs into the final
-  // ELF regardless of `lib_ldf_mode = chain`. Drop both during the X2
-  // smoke; RFID block support is documented as a follow-up Phase
-  // (re-introduce one of them once we sort out a non-conflicting layout
-  // or pick a single canonical RFID lib).
-  // 'miguelbalboa/MFRC522@^1.4.12',                          // SPI MFRC522 — re-introduce in BUG-059 follow-up
-  // 'https://github.com/arozcan/MFRC522-I2C-Library.git',    // I2C MFRC522 — re-introduce in BUG-059 follow-up
+  // BUG-059 closure (2026-04-30): 技適制約により I2C 版 RFID lib 一択。
+  // miguelbalboa/MFRC522 (SPI) と MakerSpaceLeiden/rfid (SPI/I2C/UART) は
+  // 両方とも `class MFRC522` を提供し arozcan と link collision するため drop。
+  // M5Stack RFID 2 Unit (WS1850S, I2C 0x28) が DigiCode 公式 reader、
+  // SPI 版 MFRC522 は永久にサポートしない (rfid_init_generic block 削除済)。
+  'https://github.com/arozcan/MFRC522-I2C-Library.git', // MFRC522 (I2C only — 技適対応)
 ];
 
 /** ESP32-only libs (platform = espressif32 / pioarduino). */
