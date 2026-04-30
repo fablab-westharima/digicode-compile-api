@@ -65,9 +65,18 @@ export const FQBN_TO_PIO: Record<string, PioTarget> = {
   // same physical pin assignments — only PSRAM / IMU presence differs at
   // runtime, which is irrelevant for compile correctness.
   'm5stack:esp32:m5stack_core': { platform: PIOARDUINO_PLATFORM, board: 'm5stack-fire' },
-  // M5StickC Plus has no espressif32 board ID; fall back to base m5stick-c.
-  // User-side M5StickCPlus library handles screen/battery diff at runtime.
-  'm5stack:esp32:m5stick_c_plus': { platform: PIOARDUINO_PLATFORM, board: 'm5stick-c' },
+  // M5StickC Plus has no espressif32 board ID. The obvious fallback
+  // `m5stick-c` declares `variant=m5stick_c`, but pioarduino's
+  // framework-arduinoespressif32 ships no `m5stick_c` variant directory
+  // (variants/ contains only `m5stack_*` and a few unrelated stick-named
+  // boards), so compiles fail with `pins_arduino.h: No such file or
+  // directory` (BUG-064, 1000-case cluster #12, 2026-04-30). Route through
+  // `m5stack-atom` instead — same ESP32-PICO-D4 MCU as M5StickC Plus, same
+  // route already used for ATOM Lite / Matrix above, and `m5stack_atom`
+  // variant exists. M5StickCPlus user library abstracts screen/IMU/battery
+  // diff at runtime, so the M5Stack_ATOM build flag is harmless for
+  // compile correctness; physical hardware UAT pending user device.
+  'm5stack:esp32:m5stick_c_plus': { platform: PIOARDUINO_PLATFORM, board: 'm5stack-atom' },
   'm5stack:esp32:atom_lite': { platform: PIOARDUINO_PLATFORM, board: 'm5stack-atom' },
   'm5stack:esp32:atom_matrix': { platform: PIOARDUINO_PLATFORM, board: 'm5stack-atom' },
   'm5stack:esp32:stamp_pico': { platform: PIOARDUINO_PLATFORM, board: 'm5stamp-pico' },
