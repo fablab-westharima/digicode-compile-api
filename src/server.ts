@@ -9,10 +9,40 @@
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 
 import { compile, type CompileRequest } from './compile.js';
 
 const app = new Hono();
+
+// Cross-origin support — the frontend lives on a different origin from
+// this service in every deployment topology we ship:
+//   • production CF Pages → ML30 via Cloudflare Tunnel (compile.digital-fab.jp)
+//   • production CF Pages → user-local Docker container (localhost:<port>)
+//   • Vite dev / preview → user-local Docker container
+// compileService.ts sends every POST /api/compile with
+// `Content-Type: application/json` + `Accept-Language`, which makes the
+// request non-simple, so the browser issues an OPTIONS preflight first.
+// Without this middleware the preflight returned 404 and the actual POST
+// response had no Access-Control-Allow-Origin header — the browser then
+// silently rejected the response, surfacing as 未接続 in the
+// "接続テスト" button (cloud and local alike). Missing since the 44.md
+// Phase 4 cutover from the legacy arduino-compile-server (Apr 2026);
+// reported via the 2026-05-01 user smoke.
+app.use(
+  '*',
+  cors({
+    origin: [
+      'https://code.fablab-westharima.jp', // production CF Pages
+      'http://localhost:5173', // Vite dev
+      'http://localhost:4173', // Vite preview
+      'http://localhost:3000', // legacy / alt dev
+    ],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Accept-Language'],
+    maxAge: 86400, // cache preflight for 1 day
+  }),
+);
 
 app.get('/health', (c) =>
   c.json({
