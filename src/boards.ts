@@ -99,7 +99,16 @@ export const FQBN_TO_PIO: Record<string, PioTarget> = {
   // cover RP2040 cores).
   'rp2040:rp2040:rpipico': { platform: 'raspberrypi', board: 'pico' },
   'rp2040:rp2040:rpipicow': { platform: 'raspberrypi', board: 'pico' },
-  'rp2040:rp2040:seeed_xiao_rp2040': { platform: 'raspberrypi', board: 'seeed_xiao_rp2040' },
+  // Seeed XIAO RP2040 has no board.json in the official platformio/raspberrypi
+  // platform. Verified 2026-05-04 (55.md Phase 3 D' investigation):
+  // `ls /root/.platformio/platforms/raspberrypi/boards/` returns only
+  // pico.json + nanorp2040connect.json. Same RP2040 SoC as the standard Pico
+  // — GPIO pin layout differs but compile correctness is preserved by the
+  // pico fallback (matches the strategy already used by nanorp2040connect
+  // below). XIAO-specific GPIO behaviour is a runtime concern handled in
+  // user code, outside compile-correctness scope. Physical hardware UAT
+  // pending user device. (BUG-073 mitigation, Round 4 passRate recovery R)
+  'rp2040:rp2040:seeed_xiao_rp2040': { platform: 'raspberrypi', board: 'pico' },
   'arduino:mbed_nano:nanorp2040connect': {
     platform: 'raspberrypi',
     board: 'pico',
