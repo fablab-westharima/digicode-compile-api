@@ -19,7 +19,6 @@
  * for byte-stability checks vs. the legacy server output.
  */
 
-import { isEsp32FamilyPlatform } from './boards.js';
 
 export interface UserFragments {
   includes?: string;
@@ -71,33 +70,7 @@ ${loopCode || '  // No loop code'}
 
 export type ConnectionType = 'ota' | 'usb' | 'ble';
 
-/**
- * Pick the .ino template for a given (connectionType, platform).
- *
- * The DigiCode{OTA,USB,BLE} templates all rely on ESP32-only includes
- * (WiFi.h / ArduinoOTA / NimBLEDevice / ESP32Servo / nvs_flash) that won't
- * resolve on non-ESP32 platforms (raspberrypi, atmelavr, ststm32, ...).
- * For non-ESP32 targets we always fall back to BasicArduino, which has no
- * includes and just exposes the userSetup/userLoop hooks — safe baseline
- * for any framework=arduino board.
- *
- * Root cause D of 55.md §0.2 (Round 4 passRate recovery): orchestrator +
- * production both used to send connectionType='ota' for every board,
- * pulling DigiCodeOTA's <ESPmDNS.h> / <WiFi.h> into RP2040 builds and
- * failing 4/20 boards' fresh compiles. Routing by platform here makes the
- * server authoritative: even if a future caller sends an ESP32-only
- * connectionType for an RP2040 board, the build still succeeds.
- *
- * For ESP32 family boards, the existing connectionType→template mapping
- * is preserved unchanged.
- */
-export function templateNameFor(
-  connectionType: ConnectionType | undefined,
-  platform: string,
-): string {
-  if (!isEsp32FamilyPlatform(platform)) {
-    return 'BasicArduino';
-  }
+export function templateNameFor(connectionType: ConnectionType | undefined): string {
   switch (connectionType) {
     case 'usb':
       return 'DigiCodeUSB';

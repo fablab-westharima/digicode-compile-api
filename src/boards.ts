@@ -95,42 +95,7 @@ export const FQBN_TO_PIO: Record<string, PioTarget> = {
       '-DARDUINO_USB_CDC_ON_BOOT=1',
     ],
   },
-  // RP2040 (official platformio/raspberrypi platform — pioarduino does not
-  // cover RP2040 cores).
-  'rp2040:rp2040:rpipico': { platform: 'raspberrypi', board: 'pico' },
-  'rp2040:rp2040:rpipicow': { platform: 'raspberrypi', board: 'pico' },
-  // Seeed XIAO RP2040 has no board.json in the official platformio/raspberrypi
-  // platform. Verified 2026-05-04 (55.md Phase 3 D' investigation):
-  // `ls /root/.platformio/platforms/raspberrypi/boards/` returns only
-  // pico.json + nanorp2040connect.json. Same RP2040 SoC as the standard Pico
-  // — GPIO pin layout differs but compile correctness is preserved by the
-  // pico fallback (matches the strategy already used by nanorp2040connect
-  // below). XIAO-specific GPIO behaviour is a runtime concern handled in
-  // user code, outside compile-correctness scope. Physical hardware UAT
-  // pending user device. (BUG-073 mitigation, Round 4 passRate recovery R)
-  'rp2040:rp2040:seeed_xiao_rp2040': { platform: 'raspberrypi', board: 'pico' },
-  'arduino:mbed_nano:nanorp2040connect': {
-    platform: 'raspberrypi',
-    board: 'pico',
-    // arduino-mbed core has no PIO equivalent yet; falling back to rp2040 core.
-    // Real Nano RP2040 Connect support is a Phase 2+ task (see 44-A §6).
-  },
 };
-
-/**
- * True for any ESP32-family target. After BUG-059 X2 unification every
- * ESP32 board uses the pioarduino URL string, but we keep the
- * `espressif32` literal in the predicate so the helper survives a future
- * decision to mix in the official platform again.
- */
-export function isEsp32FamilyPlatform(platform: string): boolean {
-  return platform === 'espressif32' || platform.includes('pioarduino');
-}
-
-export function isEsp32(fqbn: string): boolean {
-  const target = FQBN_TO_PIO[fqbn];
-  return target ? isEsp32FamilyPlatform(target.platform) : false;
-}
 
 export function pioTargetFor(fqbn: string): PioTarget {
   const target = FQBN_TO_PIO[fqbn];

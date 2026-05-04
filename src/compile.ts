@@ -24,7 +24,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
-import { isEsp32FamilyPlatform, pioTargetFor } from './boards.js';
+import { pioTargetFor } from './boards.js';
 import { cacheGet, cachePut, computeCacheKey } from './cache.js';
 import { injectUserCode, templateNameFor, type ConnectionType } from './inject.js';
 import { ensurePersistentProject, projectKey, writeMainIno } from './projectStore.js';
@@ -197,43 +197,39 @@ const ESP32_REGISTRY_LIBS: readonly string[] = [
 ];
 
 /**
- * Build lib_deps for a given target. Order: common volume-mount, then
- * common registry/git, then ESP32-only volume-mount + registry, then
- * Nano RP2040 Connect specifics.
+ * Build lib_deps for a given target. Order: common volume-mount + registry,
+ * then DigiCode bundled libs, then ESP32 registry libs.
  *
- * Note: Nano RP2040 Connect is currently mapped to the rp2040 (Earle
- * Philhower) core in boards.ts as a fallback. WiFiNINA support is a
- * follow-up task (44.md Phase 4+).
+ * 56.md (2026-05-05): DigiCode is ESP32-only after the RP2040 board removal,
+ * so every target gets the ESP32 lib_deps unconditionally. The signature
+ * still takes a `target` object to keep the call sites simple; future
+ * board-family branching (if it ever comes back) can rehydrate the predicate
+ * without touching every caller.
  */
-export function buildLibDeps(libsDir: string, target: { platform: string }): string[] {
-  const deps: string[] = [
+export function buildLibDeps(libsDir: string, _target: { platform: string }): string[] {
+  return [
     `file://${libsDir}/Adafruit_NeoPixel`,
     ...COMMON_REGISTRY_LIBS,
+    `file://${libsDir}/DigiCodeHumanoid`,
+    `file://${libsDir}/DigiCodeTransform`,
+    `file://${libsDir}/DigiCodeWheel`,
+    `file://${libsDir}/ESP32Servo`,
+    `file://${libsDir}/NimBLE-Arduino`,
+    `file://${libsDir}/NimBLEOta`,
+    ...ESP32_REGISTRY_LIBS,
+    // BUG-068 (2026-04-30): user code emitting #include <SD.h> causes PIO
+    // LDF to transitively pull arduino-libraries/SD@1.x from the registry,
+    // which ships utility/Sd2Card.h / SdFat.h / SdFile.cpp and fails ESP32
+    // with "#error Architecture or board not supported." The pioarduino
+    // framework already ships a compatible SD lib (name=SD, v3.2.1,
+    // architectures=esp32) at packages/framework-arduinoespressif32/
+    // libraries/SD with a matching SD.begin / SD.open / File / fs::FS API.
+    // Pinning that path with a `symlink://` lib_deps entry tells PIO LDF
+    // we already have SD; the registry version is no longer auto-installed.
+    // (Round 1 used `lib_ignore = SD` but that filtered both the registry
+    // and framework copies by name. Round 2 = explicit symlink wins.)
+    `symlink:///root/.platformio/packages/framework-arduinoespressif32/libraries/SD`,
   ];
-  if (isEsp32FamilyPlatform(target.platform)) {
-    deps.push(
-      `file://${libsDir}/DigiCodeHumanoid`,
-      `file://${libsDir}/DigiCodeTransform`,
-      `file://${libsDir}/DigiCodeWheel`,
-      `file://${libsDir}/ESP32Servo`,
-      `file://${libsDir}/NimBLE-Arduino`,
-      `file://${libsDir}/NimBLEOta`,
-      ...ESP32_REGISTRY_LIBS,
-      // BUG-068 (2026-04-30): user code emitting #include <SD.h> causes PIO
-      // LDF to transitively pull arduino-libraries/SD@1.x from the registry,
-      // which ships utility/Sd2Card.h / SdFat.h / SdFile.cpp and fails ESP32
-      // with "#error Architecture or board not supported." The pioarduino
-      // framework already ships a compatible SD lib (name=SD, v3.2.1,
-      // architectures=esp32) at packages/framework-arduinoespressif32/
-      // libraries/SD with a matching SD.begin / SD.open / File / fs::FS API.
-      // Pinning that path with a `symlink://` lib_deps entry tells PIO LDF
-      // we already have SD; the registry version is no longer auto-installed.
-      // (Round 1 used `lib_ignore = SD` but that filtered both the registry
-      // and framework copies by name. Round 2 = explicit symlink wins.)
-      `symlink:///root/.platformio/packages/framework-arduinoespressif32/libraries/SD`,
-    );
-  }
-  return deps;
 }
 
 function buildPlatformioIni(
@@ -265,11 +261,8 @@ function buildPlatformioIni(
   // `min_spiffs.csv` is an arduino-esp32-shipped layout with two 1.9 MB
   // OTA slots + a small SPIFFS region — enough headroom for NimBLE,
   // ArduinoHA + WebServer + Update, and any reasonable user code, while
-  // still preserving OTA dual-slot behaviour. RP2040 builds use the
-  // raspberrypi platform's own partition handling (no override).
-  const partitionLine = isEsp32FamilyPlatform(target.platform)
-    ? 'board_build.partitions = min_spiffs.csv\n'
-    : '';
+  // still preserving OTA dual-slot behaviour.
+  const partitionLine = 'board_build.partitions = min_spiffs.csv\n';
   return `[env:${target.board}]
 platform = ${target.platform}
 board = ${target.board}
@@ -300,7 +293,7 @@ export async function compile(
   const start = Date.now();
 
   const target = pioTargetFor(req.board);
-  const templateName = templateNameFor(req.connectionType, target.platform);
+  const templateName = templateNameFor(req.connectionType);
   const templatePath = path.join(env.templatesDir, `${templateName}.ino`);
 
   if (!existsSync(templatePath)) {
@@ -405,7 +398,6 @@ function ensureFullEsp32Bundle(
   env: CompileEnv,
   projectDir: string,
 ): CompileSuccess {
-  if (!isEsp32FamilyPlatform(target.platform)) return result;
   if (result.bootloader && result.partitions && result.bootApp0) return result;
 
   const buildDir = path.join(projectDir, '.pio', 'build', target.board);
@@ -467,7 +459,7 @@ async function runPio(
       pioBoard: target.board,
     };
 
-    if (env.fullPackage && isEsp32FamilyPlatform(target.platform)) {
+    if (env.fullPackage) {
       const bootloaderPath = path.join(buildDir, 'bootloader.bin');
       const partitionsPath = path.join(buildDir, 'partitions.bin');
       const bootApp0Path = path.join(
