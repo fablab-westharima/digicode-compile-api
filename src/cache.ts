@@ -30,21 +30,32 @@ export function computeCacheKey(
   templateName: string,
   platform: string,
   extraBuildFlags?: string[],
+  libDepsHash?: string,
 ): string {
   const h = createHash('sha256');
-  // v2 (BUG-059, 2026-04-29): include platform + extraBuildFlags so that
+  // v3 (55.md Phase 2 R4, 2026-05-04): include libDepsHash so cache entries
+  // built with one lib_deps configuration cannot serve a different
+  // configuration after a deploy. Without this, removing a lib (Heltec
+  // pollution, 55.md R1) or adding a lib leaves the previous cache active,
+  // making image cutovers invisible to the cache layer — the bug that
+  // produced Round 3's 92.6% / Round 4's 79.7% cache-HIT illusions.
+  //
+  // v2 (BUG-059, 2026-04-29): added platform + extraBuildFlags so that
   //  - the C6 pioarduino fork doesn't share entries with the official
   //    espressif32 platform under the same `esp32-c6-devkitm-1` board id;
   //  - ATOMS3 Lite (USB-CDC build flags) doesn't share entries with the
   //    plain `esp32-s3-devkitc-1` board id from `esp32-s3-generic`.
   // Bumping the prefix invalidates pre-fix cache entries, which are stale
-  // anyway after BUG-058/056/057/062 changed the generated source.
-  h.update('v2\n');
+  // anyway after every in-scope change.
+  h.update('v3\n');
   h.update(`platform=${platform}\n`);
   h.update(`board=${pioBoard}\n`);
   h.update(`template=${templateName}\n`);
   if (extraBuildFlags && extraBuildFlags.length > 0) {
     h.update(`flags=${extraBuildFlags.slice().sort().join(',')}\n`);
+  }
+  if (libDepsHash) {
+    h.update(`libDeps=${libDepsHash}\n`);
   }
   h.update(injectedSource);
   return h.digest('hex');

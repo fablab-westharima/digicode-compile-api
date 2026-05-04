@@ -21,6 +21,7 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import { isEsp32FamilyPlatform, pioTargetFor } from './boards.js';
@@ -163,7 +164,18 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   'sparkfun/SparkFun MAX3010x Pulse and Proximity Sensor Library@^1.1.2',   // MAX30102/30105 心拍/SpO2 (低推奨採用、ヘルスケア教材)
 ];
 
-/** ESP32-only libs (platform = espressif32 / pioarduino). */
+/**
+ * ESP32-only libs (platform = espressif32 / pioarduino).
+ *
+ * ⚠️ lib_deps entries are build-active: every entry here is compiled for
+ * every ESP32 build under `lib_ldf_mode = chain`, regardless of which
+ * boards use it. Do NOT add libs as placeholders for future boards —
+ * `heltecautomation/Heltec ESP32 Dev-Boards` was a placeholder here until
+ * 55.md Phase 2 (R1, 2026-05-04) and its headers/macros polluted 16/20
+ * boards' fresh compiles (root cause A of 54.md §1.2). Re-add a lib only
+ * when a board entry, board-conditional dispatch, build flags, and linker
+ * flag are introduced in the same commit.
+ */
 const ESP32_REGISTRY_LIBS: readonly string[] = [
   'dawidchyrzynski/home-assistant-integration@^2.1', // depends on ESP32 WiFi
   'dvarrel/ESPping@^1.0.5',
@@ -182,7 +194,6 @@ const ESP32_REGISTRY_LIBS: readonly string[] = [
   'm5stack/M5Unified@^0.2.14',     // M5Stack 全機種統合 (Core/Core2/Tough/CoreS3/StickC/StickC-Plus/AtomS3/Stamp/Capsule/Cardputer/etc.、D-4)
   // 52.md Phase C+D + 新規発見追加 (2026-05-04 第80回):
   'sandeepmistry/LoRa@^0.8.0',                          // LoRa SX1276/77/78/79 generic SPI (強推奨、Q-B 確定、ESP32 SPI、教育標準)
-  'heltecautomation/Heltec ESP32 Dev-Boards@^2.1.7',    // Heltec WiFi LoRa 32 系 board 対応 (将来 board 軸拡張用 placeholder)
 ];
 
 /**
@@ -303,6 +314,16 @@ export async function compile(
   const template = readFileSync(templatePath, 'utf-8');
   const injected = injectUserCode(template, req);
 
+  // 55.md Phase 2 R4 (2026-05-04): hash lib_deps into the cache key so
+  // adding/removing a lib in this file invalidates entries built with the
+  // previous configuration. Without this, image cutovers are invisible to
+  // the cache layer (Round 3's 92.6% / Round 4's 79.7% were cache-HIT
+  // illusions surviving the Heltec/bootstrap fixes).
+  // 16-char prefix of sha256 = 64-bit hash space, ample for collision-free
+  // operation at any realistic build volume.
+  const libDeps = buildLibDeps(env.libsDir, target);
+  const libDepsHash = createHash('sha256').update(libDeps.join('\n')).digest('hex').slice(0, 16);
+
   // Cache key includes board + template, so different fullPackage flags
   // landing on the same source still share the firmware.bin half — the
   // optional 4-file bundle is rebuilt from the same cached binaries.
@@ -312,6 +333,7 @@ export async function compile(
     templateName,
     target.platform,
     target.extraBuildFlags,
+    libDepsHash,
   );
 
   // 1. Cache lookup (no lock — different keys must not block each other).
