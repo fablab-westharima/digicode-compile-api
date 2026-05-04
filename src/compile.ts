@@ -148,6 +148,19 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   'sensirion/Sensirion I2C SHT3x@^1.0.1',   // stand-alone SHT30 (Fab Academy 自作回路、D-5 案 β)
   'adafruit/Adafruit SHT4x Library@^1.0.5', // stand-alone SHT40 (Adafruit 既存 lib 整合、D-5 案 β)
   'robtillaart/HX711@^0.6.3',               // HX711 ロードセル (calibrate / median 内蔵、AS5600 同 owner 一貫性、D-6)
+  // 52.md Phase C+D + 新規発見追加 (2026-05-04 第80回、Fab Academy + FS 講座 + 一般 ESP32 教育対応):
+  'akj7/TM1637 Driver@^2.2.1',                                              // TM1637 7-seg (Phase C、教育標準、blink/scroll/animation 内蔵)
+  'codewitch-honey-crisis/htcw_max7219@^2.0.0',                             // MAX7219 LED matrix (Phase C、LGPL wayoda/LedControl 回避)
+  'zinggjm/GxEPD2@^1.6.9',                                                  // E-paper 標準 lib (Phase D、Adafruit_GFX 互換、M5Paper 対応)
+  'robtillaart/INA219@^0.4.2',                                              // INA219 高精度電流/電圧/電力 (Phase D、I2C、AS5600/HX711 同 owner 一貫性)
+  'robtillaart/ACS712@^0.4.0',                                              // ACS712 ホール電流 (Phase D、Q-D 確定、RMS 計算内蔵)
+  'mikalhart/TinyGPSPlus@^1.1.0',                                           // GPS NEO-6M/8M NMEA parser (強推奨、業界標準)
+  '4-20ma/ModbusMaster@^2.0.1',                                             // Modbus RTU master (強推奨、Industrial IoT、RS485 transceiver 併用)
+  'sensirion/Sensirion I2C SCD30@^1.1.1',                                   // CO2 SCD30 (中推奨、Q-E 確定、I2C + temp/humidity 内蔵)
+  'avaldebe/PMSerial@^1.2.0',                                               // PM2.5 PMS5003 (中推奨、UART)
+  'adafruit/Adafruit NeoMatrix@^1.3.3',                                     // NeoPixel 2D matrix (中推奨、Q-H 確定、Adafruit_GFX 互換)
+  'adafruit/Adafruit APDS9960 Library@^1.3.1',                              // APDS9960 ジェスチャー/色/近接 (低推奨採用、HCI プロジェクト)
+  'sparkfun/SparkFun MAX3010x Pulse and Proximity Sensor Library@^1.1.2',   // MAX30102/30105 心拍/SpO2 (低推奨採用、ヘルスケア教材)
 ];
 
 /** ESP32-only libs (platform = espressif32 / pioarduino). */
@@ -167,6 +180,9 @@ const ESP32_REGISTRY_LIBS: readonly string[] = [
   // 51.md Phase A+B 追加 (2026-05-04 第78回、FS 講座 + Fab Academy 対応):
   'azure/Azure SDK for C@^1.1.8',  // Azure IoT Hub + Central + DPS (Microsoft 公式・MIT、D-3。失敗時 D-19 fallback = MQTT 薄ラッパー)
   'm5stack/M5Unified@^0.2.14',     // M5Stack 全機種統合 (Core/Core2/Tough/CoreS3/StickC/StickC-Plus/AtomS3/Stamp/Capsule/Cardputer/etc.、D-4)
+  // 52.md Phase C+D + 新規発見追加 (2026-05-04 第80回):
+  'sandeepmistry/LoRa@^0.8.0',                          // LoRa SX1276/77/78/79 generic SPI (強推奨、Q-B 確定、ESP32 SPI、教育標準)
+  'heltecautomation/Heltec ESP32 Dev-Boards@^2.1.7',    // Heltec WiFi LoRa 32 系 board 対応 (将来 board 軸拡張用 placeholder)
 ];
 
 /**
