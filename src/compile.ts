@@ -143,6 +143,11 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   // M5Stack RFID 2 Unit (WS1850S, I2C 0x28) が DigiCode 公式 reader、
   // SPI 版 MFRC522 は永久にサポートしない (rfid_init_generic block 削除済)。
   'https://github.com/arozcan/MFRC522-I2C-Library.git', // MFRC522 (I2C only — 技適対応)
+  // 51.md Phase A+B 追加 (2026-05-04 第78回、FS 講座 + Fab Academy 対応):
+  'm5stack/M5Unit-ENV@^1.3.2',              // ENV III (SHT30+QMP6988) + ENV IV (SHT40+BMP280) 統合 lib (D-5 案 β)
+  'sensirion/Sensirion I2C SHT3x@^1.0.1',   // stand-alone SHT30 (Fab Academy 自作回路、D-5 案 β)
+  'adafruit/Adafruit SHT4x Library@^1.0.5', // stand-alone SHT40 (Adafruit 既存 lib 整合、D-5 案 β)
+  'robtillaart/HX711@^0.6.3',               // HX711 ロードセル (calibrate / median 内蔵、AS5600 同 owner 一貫性、D-6)
 ];
 
 /** ESP32-only libs (platform = espressif32 / pioarduino). */
@@ -159,6 +164,9 @@ const ESP32_REGISTRY_LIBS: readonly string[] = [
   // every ESP32 build on the pioarduino image. No DigiCode block
   // generator emits `#include <ESP32Servo360.h>` (verified by grep), so
   // the dependency was unused dead weight from BP-era exploration.
+  // 51.md Phase A+B 追加 (2026-05-04 第78回、FS 講座 + Fab Academy 対応):
+  'azure/Azure SDK for C@^1.1.8',  // Azure IoT Hub + Central + DPS (Microsoft 公式・MIT、D-3。失敗時 D-19 fallback = MQTT 薄ラッパー)
+  'm5stack/M5Unified@^0.2.14',     // M5Stack 全機種統合 (Core/Core2/Tough/CoreS3/StickC/StickC-Plus/AtomS3/Stamp/Capsule/Cardputer/etc.、D-4)
 ];
 
 /**
