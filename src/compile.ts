@@ -300,7 +300,7 @@ export async function compile(
   const start = Date.now();
 
   const target = pioTargetFor(req.board);
-  const templateName = templateNameFor(req.connectionType);
+  const templateName = templateNameFor(req.connectionType, target.platform);
   const templatePath = path.join(env.templatesDir, `${templateName}.ino`);
 
   if (!existsSync(templatePath)) {
