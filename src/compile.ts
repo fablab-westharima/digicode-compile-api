@@ -263,11 +263,27 @@ function buildPlatformioIni(
   // ArduinoHA + WebServer + Update, and any reasonable user code, while
   // still preserving OTA dual-slot behaviour.
   const partitionLine = 'board_build.partitions = min_spiffs.csv\n';
+  // BUG-077 (2026-05-05): M5Unified pulls M5UnitUnified transitively, whose
+  // HAL adapters target ESP32 original / S2 / S3 only. On esp32-c3-devkitm-1
+  // the adapters reference symbols that don't exist on the C3 port:
+  //   - adapter_gpio.cpp:389  ADC_RTC_CLK_SRC_DEFAULT    (C3 has only ADC_DIGI_CLK_SRC_DEFAULT)
+  //   - adapter_i2c.cpp:44    gpio_dev_s::func_sel       (C3 GPIO matrix layout differs)
+  //   - adapter_i2c.cpp:55    I2CEXT1_SDA_IN_IDX / SCL   (C3 has only one I2C peripheral)
+  // → compile fails for every esp32c3 build (xiao-esp32c3, esp32-c3-generic,
+  // m5stamp-c3 all map to esp32-c3-devkitm-1). The M5Stamp C3 is a
+  // breakout-only product with no on-board LCD/buttons, so M5Unified API is
+  // not actually needed for any C3 board. Ignoring both libs at the env level
+  // is the minimum-blast-radius fix; ESP32 / S2 / S3 builds keep the full
+  // M5Unified stack. ESP32-C6 may have similar issues — verified separately
+  // (BUG-078 candidate if smoke confirms).
+  const libIgnoreLine = target.board === 'esp32-c3-devkitm-1'
+    ? 'lib_ignore = M5Unified, M5UnitUnified\n'
+    : '';
   return `[env:${target.board}]
 platform = ${target.platform}
 board = ${target.board}
 framework = arduino
-${partitionLine}; BUG-059 X2 triage round 5 (2026-04-30): pioarduino's default LDF
+${partitionLine}${libIgnoreLine}; BUG-059 X2 triage round 5 (2026-04-30): pioarduino's default LDF
 ; behaviour links every lib in lib_deps unconditionally, so
 ; \`miguelbalboa/MFRC522\` and \`arozcan/MFRC522-I2C-Library\` (two
 ; different libraries that both ship a class named MFRC522) collided at
