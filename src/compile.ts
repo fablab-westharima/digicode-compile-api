@@ -263,21 +263,41 @@ function buildPlatformioIni(
   // ArduinoHA + WebServer + Update, and any reasonable user code, while
   // still preserving OTA dual-slot behaviour.
   const partitionLine = 'board_build.partitions = min_spiffs.csv\n';
-  // BUG-077 (2026-05-05): M5Unified pulls M5UnitUnified transitively, whose
-  // HAL adapters target ESP32 original / S2 / S3 only. On esp32-c3-devkitm-1
+  // BUG-077 (2026-05-05): the M5Stack ecosystem libs depend on each other
+  // through M5UnitComponent.hpp (the M5UnitUnified base class) whose HAL
+  // adapters target ESP32 original / S2 / S3 only. On esp32-c3-devkitm-1
   // the adapters reference symbols that don't exist on the C3 port:
   //   - adapter_gpio.cpp:389  ADC_RTC_CLK_SRC_DEFAULT    (C3 has only ADC_DIGI_CLK_SRC_DEFAULT)
   //   - adapter_i2c.cpp:44    gpio_dev_s::func_sel       (C3 GPIO matrix layout differs)
   //   - adapter_i2c.cpp:55    I2CEXT1_SDA_IN_IDX / SCL   (C3 has only one I2C peripheral)
   // → compile fails for every esp32c3 build (xiao-esp32c3, esp32-c3-generic,
-  // m5stamp-c3 all map to esp32-c3-devkitm-1). The M5Stamp C3 is a
-  // breakout-only product with no on-board LCD/buttons, so M5Unified API is
-  // not actually needed for any C3 board. Ignoring both libs at the env level
-  // is the minimum-blast-radius fix; ESP32 / S2 / S3 builds keep the full
-  // M5Unified stack. ESP32-C6 may have similar issues — verified separately
-  // (BUG-078 candidate if smoke confirms).
+  // m5stamp-c3 all map to esp32-c3-devkitm-1).
+  //
+  // The initial fix (`lib_ignore = M5Unified, M5UnitUnified`) was incomplete:
+  // M5Unit-ENV is a separate top-level lib in COMMON_REGISTRY_LIBS that
+  // depends on M5UnitComponent.hpp (verified by full-recursive grep in
+  // libdeps/esp32-c3-devkitm-1: every M5Unit-ENV/src/unit/*.hpp includes
+  // <M5UnitComponent.hpp>). When M5UnitUnified is ignored, M5Unit-ENV's
+  // own compile fails at unit_BME688.cpp → fatal "M5UnitComponent.hpp:
+  // No such file or directory". Adding M5Unit-ENV to the ignore list closes
+  // the gap. M5HAL / M5Utility / M5GFX are not in the list because grep
+  // confirmed they do not reference M5UnitComponent (M5HAL self-references
+  // M5Utility only; M5Utility is self-contained; M5GFX is a transitive dep
+  // of M5Unified that PIO chain mode auto-skips when M5Unified is ignored).
+  //
+  // M5Stamp C3 is a breakout-only product with no on-board LCD/buttons,
+  // so M5Unified / M5Unit-ENV APIs are not actually needed for any C3 board.
+  // Ignoring all three libs at the env level is the minimum-blast-radius fix;
+  // ESP32 / S2 / S3 builds keep the full M5 stack. ESP32-C6 was verified to
+  // not have the same issue (smoke esp32c6 × usb PASSed before this followup
+  // fix), so no BUG-078 needed.
+  //
+  // 教訓: lib_ignore 範囲決定は transitive header reference grep 全件で実証必須。
+  // See `prompt/maintenance/rules/common/judgment-mistakes-history.md` (パターン B
+  // scope の自己確証) — initial fix で M5UnitUnified ignore の transitive
+  // 依存先 (M5Unit-ENV) を grep せず scope 確定した判断ミスを記録。
   const libIgnoreLine = target.board === 'esp32-c3-devkitm-1'
-    ? 'lib_ignore = M5Unified, M5UnitUnified\n'
+    ? 'lib_ignore = M5Unified, M5UnitUnified, M5Unit-ENV\n'
     : '';
   return `[env:${target.board}]
 platform = ${target.platform}
