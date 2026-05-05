@@ -138,6 +138,14 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   'marcoschwartz/LiquidCrystal_I2C@^1.1.4',
   'pololu/QTRSensors@^4', // latent fix: legacy Dockerfile missed this. Latest is v4.0.0 (2019).
   'teckel12/NewPing@^1.9', // bundled libs/NewPing is v1.5 AVR-only; registry has ESP32 support
+  // post-Phase 4-4 commit 3 (case_0197-0202 fix, 2026-05-06): stepperDriverBlocks.ts
+  // (52.md commit 2e50876, 第80回) emits `#include <AccelStepper.h>` for both
+  // a4988_* (5 blocks) and uln2003_* (2 blocks) generators, but AccelStepper
+  // was never registered in lib_deps. Source comment already pinned `@^1.64`,
+  // the registration was the only gap. PIO registry: waspinator/AccelStepper
+  // (latest 1.64, Nov 2022). Same systematic root cause as commits 2-4/2-7/2-10
+  // (block added without lib_deps registration in compile.ts).
+  'waspinator/AccelStepper@^1.64', // a4988 + uln2003 stepper drivers (52.md commit #5)
   // BUG-059 closure (2026-04-30): 技適制約により I2C 版 RFID lib 一択。
   // miguelbalboa/MFRC522 (SPI) と MakerSpaceLeiden/rfid (SPI/I2C/UART) は
   // 両方とも `class MFRC522` を提供し arozcan と link collision するため drop。
