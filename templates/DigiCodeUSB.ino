@@ -10,10 +10,20 @@
  */
 
 #include <ESP32Servo.h>
+#include <Preferences.h>
 
 // UUID（デバイス識別子）
 String deviceUUID = "";
 const int UUID_LENGTH = 16;
+
+// Preferences (NVS) instance — post-Phase 4-4 commit 2-5 (case_0207-0212 fix):
+// preferences_begin generator は redefinition 回避のため declare せず、template
+// 側の global instance に依存する設計 (storageNvsBlocks.ts:42-51 参照)。OTA
+// template (DigiCodeOTA.ino:56) では既に declare 済、本 template (USB) と
+// DigiCodeBLE.ino でも declare して 3 template 統一。Round 1 RCA cluster #5 の
+// redefinition は OTA だけで declare していた非対称が原因、本修正で解消。
+// See rules/digicode/03-block-workflow.md "Init block protocol".
+Preferences preferences;
 
 // サーボ設定
 // NOTE: ESP32Servo.h defines MAX_SERVOS as 16, so we use USER_MAX_SERVOS here
