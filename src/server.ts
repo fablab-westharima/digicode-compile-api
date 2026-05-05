@@ -210,8 +210,48 @@ app.post('/api/compile/sse', async (c) => {
     }
   });
 
-  // streamSSE() が設定した Cache-Control: no-cache を no-transform 込みに
-  // 上書き (RFC 7234 + Mintlify postmortem 教訓直接適用)。
+  /**
+   * Cache-Control header post-override workaround (Pattern B 1 件目 + 7 件目、
+   * commit #2 hotfix を 第84回 commit #5 で documentation 強化).
+   *
+   * Hono v4.6 streamSSE() は内部で `c.header('Cache-Control', 'no-cache')` を
+   * 呼び (`hono/dist/helper/streaming/sse.js:59`)、前段の `c.header()` 設定を
+   * 上書きする (default = replace mode)。よって `'no-cache, no-transform'` を
+   * pre-set しても streamSSE の内部 c.header() で `'no-cache'` のみに置換され、
+   * `no-transform` directive が消失。Cloudflare auto-compression が SSE event
+   * を buffer する Mintlify postmortem 教訓 (CF compression OFF + no-transform +
+   * X-Accel-Buffering の 3-layer mitigation) を完全実装するために post-override
+   * が必須。
+   *
+   * 実装: streamSSE() 戻り Response の `.headers.set()` で post-override
+   * (Hono streamSSE は sync 返却 = sse.js:62、Headers mutable で commit 前修正可)。
+   *
+   * 5 axis cross-verification 実証 (Pattern B 7 件目 = Stage B DevTools UI quirk
+   * の真因究明、第84回):
+   *   - axis 1 (ssh ml30 → localhost:3004 直接 HTTP/1.1): no-transform 含む ✅
+   *   - axis 2 (Stage A curl HTTP/2 + CF Tunnel): no-transform 含む ✅
+   *   - axis 3 (browser-mimic curl HTTP/2 + Accept-Encoding gzip,br,zstd): 含む ✅
+   *   - axis 4 (user 確証 curl Stage B 同条件): 含む ✅
+   *   - axis 5 (Chrome DevTools UI rendering): subset 表示 (UI quirk、実 raw response 不変)
+   * → 真因 = browser DevTools rendering quirk、server / CF / browser 全 layer で
+   *   no-transform 完全動作、defense-in-depth 完全実証。
+   *
+   * Future Hono regression risk:
+   * Hono v4.7+ で streamSSE 内部実装が変わると本 post-override が機能不全 or
+   * 不要 になる可能性。判定方法 = 第84回 Stage A 同等の curl smoke で
+   *   curl -I -H 'Accept-Encoding: gzip, br' https://compile.digital-fab.jp/health
+   * → response header `cache-control: no-cache, no-transform` 含むか確認。
+   * 含まなければ:
+   *   - Hono streamSSE が `no-transform` を default で吐くようになった可能性
+   *     → post-override 削除可 (sketch refactor)
+   *   - Hono streamSSE が override を許容するようになった可能性
+   *     → c.header() pre-set のみで OK (sketch refactor)
+   *   - 何らかの規制で消える場合
+   *     → 本 post-override の retain + 別 mitigation 検討
+   *
+   * 関連: prompt/maintenance/rules/common/judgment-mistakes-history.md
+   *       第84回 Pattern B 1 件目 + 7 件目 entry。
+   */
   response.headers.set('Cache-Control', 'no-cache, no-transform');
   return response;
 });
