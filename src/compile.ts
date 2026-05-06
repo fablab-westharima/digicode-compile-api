@@ -151,7 +151,14 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   // 両方とも `class MFRC522` を提供し arozcan と link collision するため drop。
   // M5Stack RFID 2 Unit (WS1850S, I2C 0x28) が DigiCode 公式 reader、
   // SPI 版 MFRC522 は永久にサポートしない (rfid_init_generic block 削除済)。
-  'https://github.com/arozcan/MFRC522-I2C-Library.git', // MFRC522 (I2C only — 技適対応)
+  // post-Phase 4-4 commit 16 (2026-05-06): release 前に commit hash pin で
+  // upstream drift による silent breakage を防ぐ。`c0e3c5d` は Phase 4-4
+  // で動作実証済の master HEAD (ML30 cache `.piopm` で `sha.c0e3c5d` を
+  // 確証、PIO smoke 70/77 で build 通過確認)。registry 公式 pin を持たない
+  // git URL lib は PIO が毎回 master HEAD を fetch するため、upstream の
+  // breaking change が release 後に user 全員の compile を突然 fail させる
+  // 重大 risk があった。
+  'https://github.com/arozcan/MFRC522-I2C-Library.git#c0e3c5d1e54745928a787a9d4e70f21fcaf59943', // MFRC522 (I2C only — 技適対応、commit hash pin 2026-05-06)
   // 51.md Phase A+B 追加 (2026-05-04 第78回、FS 講座 + Fab Academy 対応):
   'm5stack/M5Unit-ENV@^1.3.2',              // ENV III (SHT30+QMP6988) + ENV IV (SHT40+BMP280) 統合 lib (D-5 案 β)
   'sensirion/Sensirion I2C SHT3x@^1.0.1',   // stand-alone SHT30 (Fab Academy 自作回路、D-5 案 β)
