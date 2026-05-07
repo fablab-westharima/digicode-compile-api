@@ -102,6 +102,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Disable provenance + SBOM attestation generation (2026-05-08):
+          # the default `mode=max` provenance produces an OCI manifest list
+          # that ghcr.io accepts but Docker Hub rejects with an HTML 5xx
+          # body. Symptom is `buildx failed with: </body></html>` — the tail
+          # of the registry's error page. Both retry attempts (commit b80fb4d
+          # and 2088f1b) failed identically at the push hop while ghcr.io
+          # received the image fine. Disabling attestation drops the affected
+          # manifest entries; image pull semantics are unchanged.
+          provenance: false
+          sbom: false
 
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
