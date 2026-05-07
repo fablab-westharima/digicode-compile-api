@@ -77,25 +77,54 @@ const PIOARDUINO_PLATFORM =
   'https://github.com/pioarduino/platform-espressif32/releases/download/54.03.21/platform-espressif32.zip';
 
 /**
- * 7 unique PIO targets in compile-api/src/boards.ts FQBN_TO_PIO (after
- * dedup by board id — m5stack-atom is shared by atom_lite + atom_matrix +
- * m5stick_c_plus; esp32-s3-devkitc-1 is shared by esp32s3 + ATOMS3 Lite,
- * the ATOMS3 Lite USB-CDC build flags are NOT baked here so the
- * persistent project dir matches the more-common plain s3 path; ATOMS3
- * Lite first compile after cutover triggers a partial rebuild only —
- * `.pio/libdeps/` is already warm).
+ * 3 representative PIO targets covering both ESP32 toolchain families
+ * (xtensa + riscv32) and ensuring all runtime SoC variants have their
+ * toolchains + framework-libs SoC-variant subpackages pre-installed.
  *
- * Mirroring boards.ts changes here (e.g. adding a new SoC) is required for
- * the bake to cover the new target on the next image build.
+ * v3++ target reduction (2026-05-07, post-v2 verification):
+ *   v2 (7 targets) image was 16.9 GB virtual / 4.06 GB transport. The
+ *   dominant cost is toolchain + framework-libs install (unavoidable for
+ *   c3/c6/s3 runtime support), NOT the build_cache_dir itself (1.2 GB /
+ *   ~400 MB transport). Going 7 → 3 targets saves ~700 MB virtual /
+ *   ~200 MB transport on build_cache_dir but does not reduce toolchain
+ *   or framework-libs (1.3 GB single package shipping all 7 SoC variants
+ *   under packages/framework-arduinoespressif32-libs/{esp32, s3, c3, c6,
+ *   s2, h2, p4}/).
+ *
+ * Coverage rationale for the 3 chosen targets:
+ *   - esp32dev          → installs xtensa-esp-elf toolchain (1.2 GB);
+ *                          full cache for esp32 SoC. m5stack-fire /
+ *                          m5stack-atom / m5stamp-pico (also esp32 SoC)
+ *                          reuse the toolchain at runtime; their first
+ *                          compile pays only for user-lib compilation
+ *                          (~3-4 min) since SCons cache key includes
+ *                          board-specific defines (-DARDUINO_<BOARD>) so
+ *                          user-lib .o files are not cross-board cached.
+ *   - esp32-s3-devkitc-1 → triggers s3 framework-libs subpackage install
+ *                          (or any equivalent xtensa-s3 component
+ *                          differences). Full cache for s3 SoC builds.
+ *                          ATOMS3 Lite (mapped to same board id with
+ *                          different build flags) hits cache MISS due to
+ *                          different flags but reuses toolchain.
+ *   - esp32-c3-devkitm-1 → installs riscv32-esp toolchain (2.4 GB) +
+ *                          c3 framework-libs subpackage. esp32-c6-devkitm-1
+ *                          (also riscv32 SoC) reuses the toolchain; first
+ *                          compile cost = c6 framework-libs sub-package
+ *                          DL (~30s) + user-lib compile (~3-4 min).
+ *
+ * Non-warmup boards' first runtime compile = ~3-4 min (toolchain HIT,
+ * framework-libs HIT, user-lib MISS). Better than AS-IS ~5-7 min cold
+ * (which had no toolchain pre-install for s3/c3/c6).
+ *
+ * Mirroring boards.ts changes here (e.g. adding a new SoC family like
+ * h2 or p4) is required for the bake to cover the new target on the
+ * next image build. Adding boards within an existing SoC family is
+ * cache MISS for first compile but otherwise functional.
  */
 const PRIMER_TARGETS: ReadonlyArray<PioTarget> = [
   { platform: PIOARDUINO_PLATFORM, board: 'esp32dev' },
   { platform: PIOARDUINO_PLATFORM, board: 'esp32-s3-devkitc-1' },
   { platform: PIOARDUINO_PLATFORM, board: 'esp32-c3-devkitm-1' },
-  { platform: PIOARDUINO_PLATFORM, board: 'esp32-c6-devkitm-1' },
-  { platform: PIOARDUINO_PLATFORM, board: 'm5stack-fire' },
-  { platform: PIOARDUINO_PLATFORM, board: 'm5stack-atom' },
-  { platform: PIOARDUINO_PLATFORM, board: 'm5stamp-pico' },
 ];
 
 const PRIMER_CONNECTION: ConnectionType = 'ota';
@@ -195,6 +224,25 @@ function main(): void {
   );
   for (const r of results) {
     console.log(`[warmup-pio]   ${r.board}: ${r.ok ? 'OK' : 'PARTIAL'} (${r.ms}ms)`);
+  }
+
+  // v3++ image-size cleanup (2026-05-07): drop /root/.platformio/dist/
+  // (PIO download tarball staging area) — once toolchain + framework
+  // packages are extracted to /root/.platformio/packages/, the staged
+  // tarballs are not needed at runtime. PIO would only re-fetch them on
+  // an explicit `pio platform install` reinvocation, which is not a
+  // runtime path. Saves ~450 MB virtual / ~200 MB transport.
+  //
+  // /root/.platformio/.cache/ (download cache for re-installs of registry
+  // libs) is intentionally NOT removed — runtime first compile per
+  // (board, template) post-cutover may re-resolve `lib_deps` and benefit
+  // from cached tarballs there. Keeping .cache/ avoids ~30-60s of network
+  // DL per first compile.
+  console.log('[warmup-pio] cleanup — removing /root/.platformio/dist/ (PIO staging area, not needed at runtime)');
+  try {
+    rmSync('/root/.platformio/dist', { recursive: true, force: true });
+  } catch (e) {
+    console.warn('[warmup-pio] dist cleanup failed (non-fatal):', e);
   }
 }
 

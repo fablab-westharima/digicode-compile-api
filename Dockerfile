@@ -52,17 +52,14 @@ RUN pip3 install --no-cache-dir --break-system-packages \
         "click<8.2" \
         "esptool"
 
-# Pre-install raspberrypi (Pico / Pico W / XIAO RP2040 / Nano RP2040 Connect
-# fallback). The pioarduino fork now drives every ESP32 target — see
-# compile-api/src/boards.ts — but installing it via `pio platform install
-# <url>` blew up in two prior attempts (git+#tag and release-zip URLs both
-# returned "An error occurred while installing platform" inside pio's
-# installer code path). The platformio.ini-driven `platform = <url>` route
-# in warmup-pio.ts succeeds, so pioarduino is intentionally lazy-installed
-# from there. arduino-mbed is intentionally NOT installed — no FQBN in
-# boards.ts maps to it (Nano RP2040 Connect uses raspberrypi/pico fallback).
-RUN pio platform install raspberrypi \
-    && rm -rf /root/.platformio/.cache
+# raspberrypi platform install removed (amendment 9 v3++, 2026-05-07):
+# 56.md (2026-05-05) deleted every RP2040 board mapping from
+# compile-api/src/boards.ts (DigiCode is ESP32-only), so the
+# `pio platform install raspberrypi` step that previously installed
+# toolchain-gccarmnoneeabi (~458 MB virtual) was carrying dead weight.
+# Saves ~150 MB transport size for end-user image distribution. The
+# pioarduino fork drives every ESP32 target via the platformio.ini
+# `platform = <url>` route (lazy-install at warmup-pio.ts time).
 
 # DigiCode custom + version-pinned vendored libs (LIBS_DIR=/opt/digicode-compile/libs).
 # Source: arduino-compile-server/libraries/, minus NewPing v1.5
