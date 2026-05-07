@@ -86,9 +86,19 @@ COPY scripts/ ./scripts/
 RUN npx tsx scripts/warmup-pio.ts
 
 # Defaults match compile-api/src/compile.ts DEFAULT_ENV. Override via `docker run -e`.
-# COMPILE_TIMEOUT_MS bumped 180s -> 300s in 45.md Phase 2 (Q1 = C):
-# even with primer pre-warm, fresh-container first compile may still pay for
-# lib_deps unpack + initial g++; 5 min is the safety net.
+# COMPILE_TIMEOUT_MS history (amendment 7, 2026-05-07):
+#   180s -> 300s (45.md Phase 2 Q1=C): primer pre-warm baseline.
+#   300s -> 900s (BUG-078 era, ML30 docker-compose env override): heavy lib
+#                lottery (NimBLE + ArduinoHA + deep registry chain) cold
+#                compile ranged 360-509s, 300s SIGTERMed 11/77 cases at
+#                Stage D v1, blocked release. Compose env override has been
+#                running successfully since.
+#   900s baked here (amendment 7): persists the long-known safe default into
+#                the image so end-user installations (Phase 7 DockerHub
+#                distribution) get the right value out of the box, no
+#                docker-compose surgery required. ML30's compose override
+#                stays in place defensively, redundant but harmless (compose
+#                env wins regardless of image ENV).
 ENV PORT=3001 \
     PIO_BIN=/usr/local/bin/pio \
     PIO_HOME=/root/.platformio \
@@ -96,7 +106,7 @@ ENV PORT=3001 \
     LIBS_DIR=/opt/digicode-compile/libs \
     PROJECTS_DIR=/opt/digicode-compile/projects \
     CACHE_DIR=/opt/digicode-compile/cache \
-    COMPILE_TIMEOUT_MS=300000
+    COMPILE_TIMEOUT_MS=900000
 
 EXPOSE 3001
 
