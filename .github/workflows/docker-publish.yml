@@ -67,12 +67,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # DockerHub mirror push (initial-prep task, 2026-05-08): ghcr.io stays
-      # canonical (no rate limit on public anonymous pulls); DockerHub adds
-      # discoverability — Docker Desktop's image search only queries Docker
-      # Hub, so beginners pulling via the GUI need this mirror. metadata-action
-      # below is given both registries on `images:`, so a single build push
-      # pushes to both at once (cache reused).
+      # Docker Hub login for the post-build mirror step (see below).
+      # The login-action authenticates the host docker daemon (not just
+      # buildx), so the subsequent `docker push` uses the standard pusher
+      # via the system socket — exactly the same code path the legacy
+      # mini-PC `docker push` script used (per archived 2026-04-10
+      # `07_DockerHubアップデート手順.md`).
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -84,15 +84,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ env.GHCR_IMAGE }}
-            ${{ env.DOCKERHUB_IMAGE }}
+          images: ${{ env.GHCR_IMAGE }}
           tags: |
             type=raw,value=latest
             type=raw,value=v0.1.0
             type=sha,prefix=main-,format=short
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image (ghcr.io canonical)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -102,16 +101,58 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Disable provenance + SBOM attestation generation (2026-05-08):
-          # the default `mode=max` provenance produces an OCI manifest list
-          # that ghcr.io accepts but Docker Hub rejects with an HTML 5xx
-          # body. Symptom is `buildx failed with: </body></html>` — the tail
-          # of the registry's error page. Both retry attempts (commit b80fb4d
-          # and 2088f1b) failed identically at the push hop while ghcr.io
-          # received the image fine. Disabling attestation drops the affected
-          # manifest entries; image pull semantics are unchanged.
-          provenance: false
-          sbom: false
 
-      - name: Image digest
-        run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
+      - name: Image digest (ghcr.io)
+        run: echo "ghcr.io image digest = ${{ steps.build.outputs.digest }}"
+
+      # Mirror to Docker Hub via the host docker daemon (S1 fix, 2026-05-08).
+      #
+      # Why a separate step (and not docker/build-push-action's multi-image
+      # `images:` list):
+      #   docker/build-push-action runs through buildkit/buildx which
+      #   defaults to a *monolithic* PUT for blob upload (single HTTP
+      #   request carrying the entire layer). Docker Hub's registry-1
+      #   endpoint sits behind Cloudflare with a 100 MB request body cap.
+      #   The warmup-pio.ts result is a single ~2.97 GB layer, so the
+      #   monolithic PUT trips Cloudflare → returns the default 400 page
+      #   (`<html><body><h1>400 Bad request</h1>...`). Verified across 3
+      #   attempts (run ids 25508150506 / 25508705431 / 25509860068);
+      #   provenance/sbom toggles did not help because the upload itself
+      #   never reached the registry.
+      #
+      # The legacy mini-PC procedure (archived 2026-04-10) used standalone
+      # `docker push`, which performs *chunked* upload by default —
+      # Cloudflare receives many ≤100 MB PATCH chunks instead of one
+      # 2.97 GB PUT, and the upload completes. We replicate that here on
+      # the runner: pull from ghcr.io (already pushed above) into the
+      # host docker daemon, retag, push to Docker Hub via the same
+      # chunked path the mini-PC used.
+      #
+      # The mirror copies the byte-identical image — same digest as
+      # ghcr.io, just a different repo name. This is intentional: it
+      # guarantees ML30 (cloud, ghcr.io) and end-user local installs
+      # (Docker Desktop, Docker Hub) run the same compile output, no
+      # version drift.
+      - name: Mirror ghcr.io image to Docker Hub
+        run: |
+          set -euo pipefail
+          SHA_SHORT="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          GHCR_TAG="${{ env.GHCR_IMAGE }}:main-${SHA_SHORT}"
+          DH_TAG_SHA="${{ env.DOCKERHUB_IMAGE }}:main-${SHA_SHORT}"
+          DH_TAG_LATEST="${{ env.DOCKERHUB_IMAGE }}:latest"
+
+          echo "Pulling ${GHCR_TAG} into host docker daemon..."
+          docker pull "${GHCR_TAG}"
+
+          echo "Retagging for Docker Hub..."
+          docker tag "${GHCR_TAG}" "${DH_TAG_SHA}"
+          docker tag "${GHCR_TAG}" "${DH_TAG_LATEST}"
+
+          echo "Pushing to Docker Hub (chunked upload via host docker daemon)..."
+          docker push "${DH_TAG_SHA}"
+          docker push "${DH_TAG_LATEST}"
+
+          echo "Mirror complete:"
+          echo "  ghcr.io   = ${GHCR_TAG}"
+          echo "  docker.io = ${DH_TAG_SHA}"
+          echo "  docker.io = ${DH_TAG_LATEST}"
