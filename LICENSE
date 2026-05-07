@@ -1,36 +1,36 @@
-DigiCode Compile API — Proprietary License
+MIT License
 
-Copyright (c) 2026 DigiCo LLC (合同会社デジコ). All rights reserved.
+Copyright (c) 2026 Digi Co LLC (合同会社デジコ)
 
-The following components in this software are proprietary to DigiCo LLC
-and are protected under applicable copyright laws:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-  - compile-api/src/ (server source code)
-  - compile-api/scripts/ (build scripts)
-  - compile-api/templates/ (DigiCodeOTA.ino, DigiCodeUSB.ino,
-    DigiCodeBLE.ino, BasicArduino.ino)
-  - compile-api/libs/DigiCodeHumanoid/
-  - compile-api/libs/DigiCodeTransform/
-  - compile-api/libs/DigiCodeWheel/
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-PERMITTED:
-  - Running this software for personal, educational, or commercial use
-    via the provided Docker image as distributed by DigiCo LLC.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-PROHIBITED:
-  - Copying, modifying, merging, publishing, distributing, sublicensing,
-    or selling copies of the proprietary components listed above.
-  - Extracting proprietary components from the Docker image for use in
-    other software or services.
-  - Reverse engineering or decompiling the proprietary components,
-    except as permitted by applicable law.
+---
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED. IN NO EVENT SHALL DIGICO LLC BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+This repository includes vendored third-party libraries under `libs/` that
+retain their original licenses:
 
-Third-party open-source components included in this Docker image retain
-their original licenses (MIT, Apache 2.0, LGPL, etc.). See individual
-library directories for their respective license terms.
+  - libs/Adafruit_NeoPixel/      LGPL-3.0
+  - libs/NimBLE-Arduino/         Apache-2.0
+  - libs/NimBLEOta/              MIT
+  - libs/ESP32Servo/             (see libs/ESP32Servo/ for terms)
+  - libs/DigiCodeHumanoid/       MIT (Digi Co LLC)
+  - libs/DigiCodeTransform/      MIT (Digi Co LLC)
+  - libs/DigiCodeWheel/          MIT (Digi Co LLC)
 
-Contact: contact@digi-co.jp
+See each library's directory for the original LICENSE / COPYING file.
