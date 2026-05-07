@@ -547,12 +547,33 @@ function ensureFullEsp32Bundle(
   return enriched;
 }
 
+/**
+ * SCons writes its signature database (`.sconsignNNN.dblite`) under
+ * build_cache_dir using an atomic rename pattern: write `.tmp`, then rename
+ * to `.dblite`. When two parallel `pio run` invocations share the same
+ * build_cache_dir (amendment 9 v3++ runtime config — single shared cache
+ * across all (board, template) pairs), the rename can race and one process
+ * sees `FileNotFoundError: ... .sconsignNNN.tmp -> .sconsignNNN.dblite`.
+ * Empirically observed once per ~77 cases at parallel=2 (spot 80 run
+ * 2026-05-07_15-40-56, case_0704). Single retry has succeeded every
+ * observation; the race is purely transient.
+ *
+ * Compounded probability: 1.3% × 1.3% = ~0.017% post-retry, negligible.
+ *
+ * Production user impact (parallel=1) is ZERO — no concurrent invocation,
+ * no race possible. Retry is purely test-orchestrator hygiene, but adding
+ * it server-side keeps every client (orchestrator + frontend) automatically
+ * resilient without compile-client.ts coupling.
+ */
+const SCONS_RACE_PATTERN = /sconsign\d+\.(tmp|dblite)/i;
+
 async function runPio(
   projectDir: string,
   target: ReturnType<typeof pioTargetFor>,
   templateName: string,
   env: CompileEnv,
   start: number,
+  isRetry = false,
 ): Promise<CompileResult> {
   try {
     const { stderr } = await execP(`${env.pioBin} run`, {
@@ -574,12 +595,19 @@ async function runPio(
     }
     const firmware = readFileSync(firmwarePath).toString('base64');
 
+    // amendment 9 v3++ followup (2026-05-07): set `cached: false` explicitly
+    // on fresh compile success so the orchestrator's HIT/MISS aggregation
+    // (lib/result-store.ts summary()) classifies it as MISS rather than
+    // unknown. Without this, spot 80 runs with --no-cache reported
+    // `Cache: n/a (77 cases without compile)` even though every case was a
+    // genuine fresh compile (cache MISS by design).
     const result: CompileSuccess = {
       success: true,
       firmware,
       durationMs,
       template: templateName,
       pioBoard: target.board,
+      cached: false,
     };
 
     if (env.fullPackage) {
@@ -615,6 +643,15 @@ async function runPio(
         stderr: err.stderr?.slice(-2000),
         durationMs,
       };
+    }
+    // amendment 9 v3++ followup (2026-05-07): retry once on the SCons
+    // build_cache_dir rename race so the test orchestrator's parallel=2 path
+    // doesn't accumulate transient fails from concurrent .sconsign updates.
+    // See SCONS_RACE_PATTERN docstring above for context.
+    if (!isRetry && err.stderr && SCONS_RACE_PATTERN.test(err.stderr)) {
+      const raceLine = err.stderr.match(/FileNotFoundError[^\n]*/)?.[0] ?? 'sconsign race';
+      console.warn(`[compile] SCons build_cache_dir race detected, retrying once: ${raceLine}`);
+      return runPio(projectDir, target, templateName, env, start, true);
     }
     return {
       success: false,
