@@ -259,6 +259,19 @@ export function buildLibDeps(libsDir: string, _target: { platform: string }): st
 }
 
 /**
+ * Path to the cross-project compile object cache populated by warmup-pio.ts
+ * at image build time and reused by every runtime compile. Lives in the
+ * image filesystem (NOT a VOLUME mount), so the cache survives
+ * `docker volume rm` cycles required for proper image cutovers
+ * (`rules/digicode/05-deploy.md` PIO cache invalidation procedure). New
+ * cache entries written at runtime end up in the container's COW upper
+ * layer and are lost on container restart — acceptable because the
+ * baked-in cache covers the lib_deps universe and main.cpp is unique
+ * per request anyway.
+ */
+const BUILD_CACHE_DIR = '/root/.platformio/build-cache';
+
+/**
  * Build the platformio.ini contents for a (board, template-equivalent) target.
  * Exported so warmup-pio.ts can bake the same lib_deps + build_flags + lib_ignore
  * configuration into the image as runtime uses — DRY-ing this prevents an
@@ -332,7 +345,20 @@ export function buildPlatformioIni(
   const libIgnoreLine = target.board === 'esp32-c3-devkitm-1'
     ? 'lib_ignore = M5Unified, M5UnitUnified, M5Unit-ENV\n'
     : '';
-  return `[env:${target.board}]
+  // amendment 9 build_cache_dir pivot (2026-05-07): a cross-project compile
+  // object cache lets warmup-pio.ts populate a single shared cache and
+  // discard the per-target persistent project dirs after bake, instead of
+  // baking ~3.25 GB of project state into the image. Image size growth
+  // drops from ~3.25 GB → ~700 MB. The runtime persistent project hits
+  // the cache via SCons MD5 dedupe — first compile per (board, template)
+  // post-cutover is ~30-60s (lib resolve + cache HITs + link) instead of
+  // ~5 min cold (BUG-078 第84回 Stage D v2 max 509s). Cache lives outside
+  // VOLUME mounts so it survives `docker volume rm` cycles, baked into
+  // the image filesystem.
+  return `[platformio]
+build_cache_dir = ${BUILD_CACHE_DIR}
+
+[env:${target.board}]
 platform = ${target.platform}
 board = ${target.board}
 framework = arduino

@@ -1,9 +1,9 @@
 /**
  * warmup-pio.ts — Build-time primer that pre-DLs frameworks + lib tarballs
- * AND pre-compiles lib archives into the persistent project dirs that the
- * runtime uses, so a fresh container's first compile per (board × template)
- * does not pay for ~120s of framework download + lib_deps fetch + ~3-5 min
- * of lib `.a` archive generation.
+ * AND populates a cross-project build cache (`build_cache_dir` in
+ * compile.ts), so a fresh container's first compile per (board × template)
+ * does not pay for ~120s of framework download + ~3-5 min of lib source
+ * compilation.
  *
  * amendment 9 (2026-05-07, release 前最善状態): the original primer (45.md
  * §3 Q1=C, primer scope A2) only filled `/root/.platformio/.cache` (framework
@@ -11,32 +11,43 @@
  * projects/<board>_<template>/`) under PROJECTS_DIR remained empty until the
  * first runtime compile per env, which then took 360-509s (Stage D v2 max
  * 509s heavy lib lottery, BUG-078 第84回 — NimBLE-Arduino + ArduinoHA + a
- * deep registry chain compiling from source on a cold project). Amendment 9
- * pushes those `.pio/libdeps/` + per-lib archives under `.pio/build/<env>/` into the
- * image at build time so post-cutover the first compile per env is ~30s.
+ * deep registry chain compiling from source on a cold project).
  *
- * Why VOLUME-baked content survives: Docker copies image content into a
- * named volume on first mount when the volume is empty. So as long as
- * `docker volume rm digicode-compile-api_digicode-projects` is run before
- * `up -d` after a cutover (already documented in
- * `prompt/maintenance/rules/digicode/05-deploy.md` PIO cache invalidation
- * procedure), the freshly-evicted volume picks up image-baked archives.
+ * Strategy decision (build_cache_dir pivot, user 確定 2026-05-07 mid-build):
+ * the first amendment 9 attempt baked the per-target `.pio/build/<env>/`
+ * archives directly into the image at PROJECTS_DIR. That worked
+ * functionally (run #36 warmup-pio reported 7/7 OK in 57.3 min) but blew
+ * past the GH Actions runner's ~14 GB free disk during export and pushed
+ * the user-distributed image to ~12 GB (8.83 GB AS-IS + ~3.25 GB bake).
  *
- * Scope decision (Q1, user 確定 2026-05-07): 7 PIO targets × DigiCodeOTA
- * template only. Image growth ~3-4 GB. Other templates (DigiCodeUSB /
- * DigiCodeBLE) share the same lib_deps + ~9 割 of compiled archives, so
- * their first compile is fast even without per-template bake (only main.cpp
- * recompiles + relink). Future scope expansion = trivial config change here.
+ * Pivot: PIO `build_cache_dir` (set in compile.ts buildPlatformioIni) is a
+ * cross-project SCons-level cache of compiled `.o` files keyed by
+ * (source content + flags + arch). warmup-pio still runs `pio run` per
+ * target so SCons populates the cache, but we DELETE the per-target
+ * persistent project dirs after bake — only the cache survives in
+ * `/root/.platformio/build-cache/`. Effect: image growth ~700 MB (vs
+ * ~3.25 GB), runtime first compile per env ~30-60s (lib resolve + cache
+ * HITs + link, vs ~5 min cold). 4-5x smaller image, same UX win.
  *
- * Compile failures are tolerated — the framework + tarball DL happens before
- * the build phase, so the cache is populated even on build fail. Lib
- * archives are an additional bonus when build succeeds. We log warnings but
- * do not fail the image build.
+ * Why /root/.platformio/build-cache/ (not a VOLUME path): the cache lives
+ * in the image filesystem so it survives `docker volume rm` cycles
+ * (the standard PIO cache invalidation procedure documented in
+ * `prompt/maintenance/rules/digicode/05-deploy.md`). New cache entries
+ * written at runtime end up in the container's COW upper layer and are
+ * lost on container restart — acceptable because the baked-in cache
+ * covers the lib_deps universe and main.cpp is unique per request anyway.
  *
- * Post-bake step: src/main.ino is overwritten with a minimal stub (no user
- * code, just empty userSetup/userLoop), so the baked image does not carry
- * stale credentials / user identifiers from the warmup compile (defense in
- * depth alongside the runtime cleanup in compile.ts withLock finally).
+ * Scope decision (Q1, user 確定 2026-05-07 morning): 7 PIO targets ×
+ * DigiCodeOTA template. Same lib_deps for all templates, so DigiCodeUSB /
+ * DigiCodeBLE first compile reuses the cache for ~9 割 of work.
+ *
+ * Compile failures are tolerated — the framework + tarball DL happens
+ * before the build phase, so /root/.platformio/.cache is populated even
+ * on build fail. The build cache requires successful compile for entries,
+ * so a partial bake means partial cache (still better than no cache).
+ *
+ * Post-bake cleanup: per-target project dir is removed entirely at the
+ * end of bakeOneTarget (cache content survives in build_cache_dir).
  */
 
 import { execSync } from 'node:child_process';
@@ -141,13 +152,18 @@ function bakeOneTarget(target: PioTarget): { board: string; ok: boolean; ms: num
     );
   }
 
-  // Post-bake cleanup: clear main.ino so the baked image carries no
-  // identifiable user code (defense in depth alongside compile.ts runtime
-  // cleanup; release-gate audit #3, 2026-05-07).
+  // Post-bake cleanup: drop the entire per-target project dir. The
+  // build_cache_dir at /root/.platformio/build-cache/ holds the compiled
+  // `.o` content keyed by (source + flags + arch) and is the only piece
+  // that needs to survive into the image. Keeping the project dir would
+  // 4-5x the image growth (~3.25 GB vs ~700 MB) without speeding up the
+  // runtime first compile beyond what the cache already provides.
+  // Also doubles as the main.ino credential cleanup (release-gate audit
+  // #3, 2026-05-07) — the file is removed entirely, not just emptied.
   try {
-    writeFileSync(path.join(srcDir, 'main.ino'), '', 'utf-8');
+    rmSync(projectDir, { recursive: true, force: true });
   } catch (e) {
-    console.warn(`[warmup-pio] [${target.board}] main.ino cleanup failed (non-fatal):`, e);
+    console.warn(`[warmup-pio] [${target.board}] project cleanup failed (non-fatal):`, e);
   }
 
   return { board: target.board, ok, ms: Date.now() - start };
