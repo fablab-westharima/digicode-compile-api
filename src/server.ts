@@ -68,7 +68,12 @@ app.post('/api/compile', async (c) => {
   }
 
   const fullPackage = c.req.query('fullPackage') === 'true';
-  const result = await compile(body, { fullPackage });
+  // amendment 9 (2026-05-07): `?no-cache=true` bypasses both cacheGet and
+  // cachePut so the orchestrator can measure cold-compile wall without the
+  // result-blob cache short-circuiting and without polluting the production
+  // cache with test runs. Production clients (frontend) never set this flag.
+  const noCache = c.req.query('no-cache') === 'true';
+  const result = await compile(body, { fullPackage, noCache });
   if (!result.success) {
     return c.json(result, 200); // legacy contract: compile failures return 200 + success:false
   }
@@ -103,6 +108,7 @@ app.post('/api/compile/sse', async (c) => {
     return c.json({ success: false, error: 'invalid request body' }, 400);
   }
   const fullPackage = c.req.query('fullPackage') === 'true';
+  const noCache = c.req.query('no-cache') === 'true';
 
   // 3-layer mitigation header (layer 3):
   // - X-Accel-Buffering: no — proxy buffer 抑制 (nginx + 互換 proxy 全て理解)
@@ -133,8 +139,8 @@ app.post('/api/compile/sse', async (c) => {
 
       // 既存 compile() を変更なしで invoke。内部 cache HIT は ~50ms で返却、
       // cold compile は 100-200s 程度。compile 中は heartbeat が edge timer
-      // を keep-alive する。
-      const result = await compile(body, { fullPackage });
+      // を keep-alive する。amendment 9: noCache=true で cache を bypass。
+      const result = await compile(body, { fullPackage, noCache });
 
       if (!result.success) {
         await stream.writeSSE({

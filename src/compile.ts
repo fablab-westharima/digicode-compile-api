@@ -20,7 +20,7 @@
 
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
@@ -82,6 +82,16 @@ export interface CompileEnv {
   timeoutMs: number;
   /** Whether the request asked for ESP32 fullPackage (4-file bundle). */
   fullPackage: boolean;
+  /**
+   * Bypass the result-blob cache (cache.ts) for this request: skip both
+   * cacheGet and cachePut. Used by the orchestrator's --no-cache flag and
+   * the API's `?no-cache=true` query param so a test session does not pollute
+   * the production cache and cannot accidentally serve a previously-cached
+   * result. The lib precompile cache (image-baked .pio/build/<env>/lib<N>
+   * archives) remains active — that is exactly what amendment 9 is supposed
+   * to deliver in test mode too. Default false (production cache active).
+   */
+  noCache: boolean;
 }
 
 const DEFAULT_ENV: CompileEnv = {
@@ -93,6 +103,7 @@ const DEFAULT_ENV: CompileEnv = {
   cacheDir: process.env.CACHE_DIR ?? '/opt/digicode-compile/cache',
   timeoutMs: Number(process.env.COMPILE_TIMEOUT_MS ?? 180_000),
   fullPackage: false,
+  noCache: false,
 };
 
 /**
@@ -247,7 +258,14 @@ export function buildLibDeps(libsDir: string, _target: { platform: string }): st
   ];
 }
 
-function buildPlatformioIni(
+/**
+ * Build the platformio.ini contents for a (board, template-equivalent) target.
+ * Exported so warmup-pio.ts can bake the same lib_deps + build_flags + lib_ignore
+ * configuration into the image as runtime uses — DRY-ing this prevents an
+ * image-build precompile (amendment 9) from being silently invalidated by
+ * a runtime config drift.
+ */
+export function buildPlatformioIni(
   target: { platform: string; board: string; extraBuildFlags?: string[] },
   libsDir: string,
 ): string {
@@ -381,33 +399,17 @@ export async function compile(
   );
 
   // 1. Cache lookup (no lock — different keys must not block each other).
-  const cached = cacheGet(env.cacheDir, cacheKey);
-  if (cached) {
-    // Strip optional fullPackage fields if the caller did not ask for them,
-    // to keep response shape consistent with a fresh non-fullPackage compile.
-    const result: CompileSuccess = {
-      ...cached,
-      durationMs: Date.now() - start,
-      cached: true,
-    };
-    if (!env.fullPackage) {
-      delete result.bootloader;
-      delete result.partitions;
-      delete result.bootApp0;
-    }
-    return result;
-  }
-
-  // 2. Cache miss: compile under a per-(board × template) lock. Different
-  //    envs run in parallel; identical ones serialize through PIO.
-  const lockKey = projectKey(target.board, templateName);
-  return withLock(lockKey, async () => {
-    // Re-check the cache after acquiring the lock — a parallel request for
-    // the same key may have populated it while we were waiting.
-    const racewinner = cacheGet(env.cacheDir, cacheKey);
-    if (racewinner) {
+  //    amendment 9: env.noCache (set by `?no-cache=true` query param /
+  //    orchestrator --no-cache flag) bypasses both cacheGet here and cachePut
+  //    inside the lock, so test sessions cannot read or pollute the
+  //    production cache.
+  if (!env.noCache) {
+    const cached = cacheGet(env.cacheDir, cacheKey);
+    if (cached) {
+      // Strip optional fullPackage fields if the caller did not ask for them,
+      // to keep response shape consistent with a fresh non-fullPackage compile.
       const result: CompileSuccess = {
-        ...racewinner,
+        ...cached,
         durationMs: Date.now() - start,
         cached: true,
       };
@@ -418,6 +420,30 @@ export async function compile(
       }
       return result;
     }
+  }
+
+  // 2. Cache miss: compile under a per-(board × template) lock. Different
+  //    envs run in parallel; identical ones serialize through PIO.
+  const lockKey = projectKey(target.board, templateName);
+  return withLock(lockKey, async () => {
+    // Re-check the cache after acquiring the lock — a parallel request for
+    // the same key may have populated it while we were waiting.
+    if (!env.noCache) {
+      const racewinner = cacheGet(env.cacheDir, cacheKey);
+      if (racewinner) {
+        const result: CompileSuccess = {
+          ...racewinner,
+          durationMs: Date.now() - start,
+          cached: true,
+        };
+        if (!env.fullPackage) {
+          delete result.bootloader;
+          delete result.partitions;
+          delete result.bootApp0;
+        }
+        return result;
+      }
+    }
 
     const ini = buildPlatformioIni(target, env.libsDir);
     const { projectDir } = ensurePersistentProject(
@@ -427,13 +453,33 @@ export async function compile(
       ini,
     );
     writeMainIno(projectDir, injected);
-    const result = await runPio(projectDir, target, templateName, env, start);
-    if (result.success) {
-      // Always store the full ESP32 4-file bundle when present, regardless
-      // of `fullPackage` — future requests asking for it can hit cache.
-      cachePut(env.cacheDir, cacheKey, ensureFullEsp32Bundle(result, target, env, projectDir));
+    try {
+      const result = await runPio(projectDir, target, templateName, env, start);
+      if (result.success && !env.noCache) {
+        // Always store the full ESP32 4-file bundle when present, regardless
+        // of `fullPackage` — future requests asking for it can hit cache.
+        cachePut(env.cacheDir, cacheKey, ensureFullEsp32Bundle(result, target, env, projectDir));
+      }
+      return result;
+    } finally {
+      // amendment 9 周辺 (#3 WiFi credential cleanup, release-gate audit
+      // 2026-05-07): user code may inline WiFi SSID/password (mqttBlocks /
+      // wifi_connect generators), and main.ino persists in the projectDir
+      // until the next compile for that (board × template). Overwrite with
+      // an empty file post-compile so a paused / idle ML30 does not retain
+      // plaintext credentials. The cache blob (firmware.bin, binary) is
+      // intentionally not touched — recovering credentials from there
+      // requires decompilation, well outside the threat model. Cleanup is
+      // best-effort: a write failure must not fail the compile result.
+      try {
+        writeFileSync(path.join(projectDir, 'src', 'main.ino'), '');
+      } catch (cleanupErr) {
+        console.warn(
+          '[compile] main.ino cleanup failed (best-effort, compile result unaffected):',
+          cleanupErr,
+        );
+      }
     }
-    return result;
   });
 }
 
