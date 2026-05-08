@@ -2,7 +2,7 @@
 
 PlatformIO Core-based Arduino compile API for ESP32, used by [DigiCode](https://code.fablab-westharima.jp).
 
-**License:** MIT
+**License:** AGPL-3.0
 **Distributed as:** `ghcr.io/fablab-westharima/digicode-compile-api:latest` (multi-arch Docker image)
 
 ---
@@ -133,19 +133,22 @@ Persistent volumes mean:
 
 ## License
 
-MIT, including the vendored `libs/DigiCodeHumanoid/`, `libs/DigiCodeTransform/`, `libs/DigiCodeWheel/` (Digi Co LLC custom robotics libraries).
+GNU Affero General Public License version 3 (AGPL-3.0). Copyright © 2024-2026 DigiCo LLC.
 
-Other vendored libraries under `libs/` retain their original licenses (NimBLE-Arduino: Apache-2.0; Adafruit_NeoPixel: LGPL-3.0; NimBLEOta: MIT; ESP32Servo: see directory).
+The DigiCo LLC custom robotics libraries (`libs/DigiCodeHumanoid/`, `libs/DigiCodeTransform/`, `libs/DigiCodeWheel/`) are also distributed under AGPL-3.0.
+
+Third-party vendored libraries under `libs/` retain their original licenses (NimBLE-Arduino: Apache-2.0; Adafruit_NeoPixel: LGPL-3.0; NimBLEOta: MIT; ESP32Servo: see directory).
 
 See `LICENSE` for the full text.
 
 ---
 
-## Related projects
+## DigiCode Ecosystem
 
-- [DigiCode](https://code.fablab-westharima.jp) — Blockly-based ESP32 firmware builder (frontend, not in this repo)
-- [digicode-installer](https://github.com/fablab-westharima/digicode-installer) — one-command local install for end-users
-- [DigiCode-Finder](https://github.com/fablab-westharima/DigiCode-Finder) — mDNS device discovery helper for WiFi OTA
+- [DigiCode](https://github.com/fablab-westharima/digicode) — Main repo: Blockly-based ESP32 firmware builder (frontend + Workers backend). Live at [code.fablab-westharima.jp](https://code.fablab-westharima.jp).
+- [digicode-compile-api](https://github.com/fablab-westharima/digicode-compile-api) — This repo: PlatformIO compile server.
+- [DigiCode-Finder](https://github.com/fablab-westharima/DigiCode-Finder) — mDNS device discovery helper for WiFi OTA.
+- [digicode-installer](https://github.com/fablab-westharima/digicode-installer) — One-command local install for end-users.
 
 ---
 
