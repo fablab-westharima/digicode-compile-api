@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "PlatformIO Core-based compile API for DigiCode (replaces arduino-compile-server)",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "main": "src/server.ts",
   "scripts": {
