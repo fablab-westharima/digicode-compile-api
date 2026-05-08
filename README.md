@@ -152,6 +152,13 @@ See `LICENSE` for the full text.
 
 ---
 
-## Contact
+## Inquiries
 
-Digi Co LLC (合同会社デジコ) — contact@digi-co.jp
+For inquiries about this repository, please refer to the [main DigiCode repository](https://github.com/fablab-westharima/digicode#受付窓口について) for available channels:
+
+- DigiCode application users: HELP menu → "Send Feedback"
+- General inquiries: [FabLab West-Harima Contact Form](https://fablab-westharima.jp/contact)
+
+External contributions (Issues / Pull Requests) are not currently accepted. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
+Maintained by DigiCo LLC (合同会社デジコ) at [FabLab West-Harima](https://fablab-westharima.jp).
