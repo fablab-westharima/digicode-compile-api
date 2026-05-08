@@ -178,7 +178,7 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   // 52.md Phase C+D + 新規発見追加 (2026-05-04 第80回、Fab Academy + FS 講座 + 一般 ESP32 教育対応):
   'akj7/TM1637 Driver@^2.2.1',                                              // TM1637 7-seg (Phase C、教育標準、blink/scroll/animation 内蔵)
   'codewitch-honey-crisis/htcw_max7219@^2.0.0',                             // MAX7219 LED matrix (Phase C、LGPL wayoda/LedControl 回避)
-  'zinggjm/GxEPD2@^1.6.9',                                                  // E-paper 標準 lib (Phase D、Adafruit_GFX 互換、M5Paper 対応)
+  'adafruit/Adafruit EPD@^4.5.4',                                           // E-paper 標準 lib (Phase D + 第89回 GxEPD2 GPL-3 → Adafruit_EPD MIT 置換、Adafruit_GFX 互換、SSD1680 等 Waveshare 2.9" b/w 直接対応)
   'robtillaart/INA219@^0.4.2',                                              // INA219 高精度電流/電圧/電力 (Phase D、I2C、AS5600/HX711 同 owner 一貫性)
   'robtillaart/ACS712@^0.4.0',                                              // ACS712 ホール電流 (Phase D、Q-D 確定、RMS 計算内蔵)
   'mikalhart/TinyGPSPlus@^1.1.0',                                           // GPS NEO-6M/8M NMEA parser (強推奨、業界標準)
