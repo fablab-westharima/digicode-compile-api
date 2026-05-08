@@ -1,3 +1,11 @@
+/*
+ * DigiCode Compile Server - PlatformIO Compile API
+ * Copyright (C) 2024-2026 DigiCo LLC
+ *
+ * Licensed under the GNU Affero General Public License version 3 or later.
+ * See LICENSE file in the repository root for full terms.
+ */
+
 /**
  * warmup-pio.ts — Build-time primer that pre-DLs frameworks + lib tarballs
  * AND populates a cross-project build cache (`build_cache_dir` in

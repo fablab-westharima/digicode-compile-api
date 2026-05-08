@@ -1,3 +1,11 @@
+/*
+ * DigiCode Compile Server - PlatformIO Compile API
+ * Copyright (C) 2024-2026 DigiCo LLC
+ *
+ * Licensed under the GNU Affero General Public License version 3 or later.
+ * See LICENSE file in the repository root for full terms.
+ */
+
 /**
  * inject.ts — port of legacy `insertUserCode` from
  * `arduino-compile-server/src/index.js:119-165`.
