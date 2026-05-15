@@ -60,11 +60,22 @@ app.use(
   }),
 );
 
+// Build-time identifiers (baked into image via Dockerfile ARG/ENV in CI).
+// `gitSha` is the 7-char commit sha matching the DockerHub tag
+// `digicollc/digicode-compile-server:main-<gitSha>` so a frontend client can
+// detect "your local image is older than the latest published image" by
+// fetching this /health alongside the DockerHub tag list. Both default to
+// "unknown" when the image was built outside CI.
+const GIT_SHA = process.env.GIT_SHA ?? 'unknown';
+const BUILT_AT = process.env.BUILT_AT ?? 'unknown';
+
 app.get('/health', (c) =>
   c.json({
     status: 'ok',
     service: 'digicode-compile-api',
     version: '0.1.0',
+    gitSha: GIT_SHA,
+    builtAt: BUILT_AT,
     timestamp: new Date().toISOString(),
   }),
 );

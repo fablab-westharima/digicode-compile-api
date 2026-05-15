@@ -90,6 +90,18 @@ jobs:
             type=raw,value=v0.1.0
             type=sha,prefix=main-,format=short
 
+      # Compute build-time identifiers baked into the image for /health
+      # version check (server.ts reads process.env.GIT_SHA / BUILT_AT).
+      # GIT_SHA matches the 7-char DockerHub tag suffix (`main-<sha>`) so the
+      # frontend can compare `local /health.gitSha` against the latest tag.
+      - name: Compute build identifiers
+        id: ident
+        run: |
+          SHA_SHORT="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          echo "built_at=${BUILT_AT}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image (ghcr.io canonical)
         id: build
         uses: docker/build-push-action@v5
@@ -99,6 +111,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ steps.ident.outputs.sha_short }}
+            BUILT_AT=${{ steps.ident.outputs.built_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -136,7 +151,7 @@ jobs:
       - name: Mirror ghcr.io image to Docker Hub
         run: |
           set -euo pipefail
-          SHA_SHORT="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          SHA_SHORT="${{ steps.ident.outputs.sha_short }}"
           GHCR_TAG="${{ env.GHCR_IMAGE }}:main-${SHA_SHORT}"
           DH_TAG_SHA="${{ env.DOCKERHUB_IMAGE }}:main-${SHA_SHORT}"
           DH_TAG_LATEST="${{ env.DOCKERHUB_IMAGE }}:latest"

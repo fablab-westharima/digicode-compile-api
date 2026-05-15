@@ -99,6 +99,14 @@ RUN npx tsx scripts/warmup-pio.ts
 #                docker-compose surgery required. ML30's compose override
 #                stays in place defensively, redundant but harmless (compose
 #                env wins regardless of image ENV).
+# Build-time identifiers baked into the image for /health version check.
+# GIT_SHA is the 7-char commit sha (passed by CI; matches the DockerHub tag
+# `main-<sha>` end users compare against). BUILT_AT is an RFC3339 timestamp
+# for human display. Both default to "unknown" so a `docker build` run
+# outside CI (developer machine) still produces a runnable image.
+ARG GIT_SHA=unknown
+ARG BUILT_AT=unknown
+
 ENV PORT=3001 \
     PIO_BIN=/usr/local/bin/pio \
     PIO_HOME=/root/.platformio \
@@ -106,7 +114,9 @@ ENV PORT=3001 \
     LIBS_DIR=/opt/digicode-compile/libs \
     PROJECTS_DIR=/opt/digicode-compile/projects \
     CACHE_DIR=/opt/digicode-compile/cache \
-    COMPILE_TIMEOUT_MS=900000
+    COMPILE_TIMEOUT_MS=900000 \
+    GIT_SHA=${GIT_SHA} \
+    BUILT_AT=${BUILT_AT}
 
 EXPOSE 3001
 
