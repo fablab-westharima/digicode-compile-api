@@ -262,17 +262,15 @@ export function buildLibDeps(libsDir: string, _target: { platform: string }): st
   return [
     `file://${libsDir}/Adafruit_NeoPixel`,
     ...COMMON_REGISTRY_LIBS,
-    `file://${libsDir}/DigiCodeHumanoid`,
-    `file://${libsDir}/DigiCodeTransform`,
-    `file://${libsDir}/DigiCodeWheel`,
-    // Phase A-ε commit 2 (Session 143): new Layer 5 robot libs alongside
-    // the legacy DigiCode* trio. DigiMotion (Layer 0-4) is NOT yet listed
-    // here — Phase A-ζ adds it together with FastAccelStepper and removes
-    // the legacy trio in a single docker-rebuild cycle. Until then these
-    // 3 entries are listed but production compilation will not pick them
-    // up since DigiMotion's headers are not on the include path of the
-    // production lib_deps set. Production smoke for the new libs runs
-    // only after Phase A-ζ.
+    // Phase A-ζ + A-η (Session 145): predecessor robotics trio removed
+    // per case 23 incident E (OttoDIYLib derivation under header-declared
+    // MIT; rule 18 §Discipline 4 verbatim verify; T5 §11 grep gate in
+    // 60.md §4). The new lib stack = DigiMotion (Layer 0-4, ESP32-only
+    // platform abstraction hook on Layer 0) + DigiBiped / DigiMorpher /
+    // DigiRover (Layer 5, depends=DigiMotion). All 4 listed explicitly so
+    // PIO's libdeps resolver picks them up under file:// without relying
+    // on lib_extra_dirs auto-resolution via library.properties depends.
+    `file://${libsDir}/DigiMotion`,
     `file://${libsDir}/DigiBiped`,
     `file://${libsDir}/DigiMorpher`,
     `file://${libsDir}/DigiRover`,

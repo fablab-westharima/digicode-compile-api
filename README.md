@@ -112,9 +112,10 @@ Persistent volumes mean:
 ├── scripts/
 │   └── warmup-pio.ts        # build-time primer (3-target precompile bake)
 ├── libs/                    # vendored Arduino libraries
-│   ├── DigiCodeHumanoid/    # robotics libraries (Digi Co LLC, MIT)
-│   ├── DigiCodeTransform/
-│   ├── DigiCodeWheel/
+│   ├── DigiMotion/          # robotics base (Digi Co LLC, AGPL-3.0)
+│   ├── DigiBiped/           # Layer 5 bipedal robot (depends=DigiMotion)
+│   ├── DigiMorpher/         # Layer 5 transforming robot
+│   ├── DigiRover/           # Layer 5 wheeled rover
 │   ├── Adafruit_NeoPixel/   # LGPL-3.0
 │   ├── NimBLE-Arduino/      # Apache-2.0
 │   ├── NimBLEOta/           # MIT
@@ -135,7 +136,7 @@ Persistent volumes mean:
 
 GNU Affero General Public License version 3 (AGPL-3.0). Copyright © 2024-2026 DigiCo LLC.
 
-The DigiCo LLC custom robotics libraries (`libs/DigiCodeHumanoid/`, `libs/DigiCodeTransform/`, `libs/DigiCodeWheel/`) are also distributed under AGPL-3.0.
+The DigiCo LLC custom robotics libraries (`libs/DigiMotion/`, `libs/DigiBiped/`, `libs/DigiMorpher/`, `libs/DigiRover/`) are also distributed under AGPL-3.0.
 
 Third-party vendored libraries under `libs/` retain their original licenses (NimBLE-Arduino: Apache-2.0; Adafruit_NeoPixel: LGPL-3.0; NimBLEOta: MIT; ESP32Servo: see directory).
 

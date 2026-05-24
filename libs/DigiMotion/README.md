@@ -36,7 +36,7 @@ Layer 0  Platform HAL        (ESP32: FreeRTOS + LEDC + ESP32Servo; future RP2040
 
 This library is an **original implementation**. It is **not** a derivative work of `OttoDIY/OttoDIYLib` or any other GPL/AGPL upstream. All identifiers, public APIs, algorithms, motion patterns, gesture sets, sound presets, EEPROM/NVS layouts, and helper-function signatures are independent designs.
 
-The previous `DigiCodeHumanoid` / `DigiCodeTransform` / `DigiCodeWheel` libraries (declared MIT in their headers) were derivative works of OttoDIYLib and are being replaced by this redesign; they will be removed in Phase A-eta. This library shares no source with them.
+The predecessor robotics libraries (case 23 incident E in `judgment-mistakes-history.md` — header-declared MIT on an OttoDIYLib derivative) were removed in Phase A-η (Session 145, this repo). The legacy lib instance names are grep-gated per row 11 of the T5 12-item checklist documented in `plans/active/60_robotics-redesign-implementation-plan.md` Section 4; this library shares no source with that lineage.
 
 `DigiMotion`'s OttoDIY-non-derivation is verified per-commit via a grep gate on 12 identifier patterns (gesture 13, sound 19, Otto class API 20+, Oscillator class shape, EEPROM trim algorithm, `_moveServos` / `_execute` signatures, `playGesture` switch-case mapping, MIT header text, legacy lib instance names, `otto*` store fields). See `plans/active/60_robotics-redesign-implementation-plan.md` Section 4 (T5 12-item checklist) for the grep patterns and the per-Phase verification gates.
 

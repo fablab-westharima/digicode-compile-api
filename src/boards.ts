@@ -38,8 +38,10 @@
  *
  * Risks owners should remember when bumping this tag:
  *   - arduino-esp32 v3.x rewrote the ledc API. ESP32Servo and the
- *     DigiCodeHumanoid / DigiCodeTransform / DigiCodeWheel vendored libs
- *     all touch ledc; verify with humanoid_init + humanoid_walk smoke.
+ *     DigiMotion stack (DigiBiped / DigiMorpher / DigiRover Layer 5 libs
+ *     depending on the DigiMotion Layer 0-4 base, Session 141-145 redesign)
+ *     all touch ledc on the actuator path; verify with biped_init +
+ *     biped_walk_blocking smoke once Phase B-3 ships the new generators.
  *   - NimBLE-Arduino v2.4.0 (vendored) supports v3.x but our callback
  *     signatures (BLE v2 callback drift, BUG-066 candidate) are not
  *     production-tested.
