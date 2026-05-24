@@ -32,6 +32,21 @@ Servo servos[USER_MAX_SERVOS];
 int servoPins[USER_MAX_SERVOS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 int servoCount = 0;
 
+// ============================================
+// サーボトリム + PID gain runtime (Phase D-3、Session 148、case 23 incident B + F transport-side 解消)
+// ============================================
+// NVS namespace "servo_trim" (OTA template と整合、 cross-transport で同 storage area 共有)。
+// PID gain は SET_PID:name,kp,ki,kd command で runtime 上書き、 user code が getPidGain で読出。
+#define MAX_SERVO_TRIM 8
+int servoTrims[MAX_SERVO_TRIM] = {0};
+int servoTrimCount = 0;
+Preferences trimPrefs;
+
+#define MAX_PID_INSTANCES 4
+struct PidGainEntry { String name; float kp; float ki; float kd; };
+PidGainEntry pidGains[MAX_PID_INSTANCES];
+int pidGainCount = 0;
+
 // シリアル通信バッファ
 String serialBuffer = "";
 
@@ -52,10 +67,18 @@ void setup() {
   Serial.print("UUID: ");
   Serial.println(deviceUUID);
 
+  // Phase D-3 (Session 148、 case 23 incident B 解消):
+  // NVS からトリム値を読込、 setup 後半で applyTrimsToActuators() で physical 反映
+  loadServoTrims();
+
   Serial.println("Ready.");
 
   // ユーザー定義のsetup処理を呼び出し
   userSetup();
+
+  // Phase D-3 (Session 148、 case 23 incident B 解消):
+  // userSetup() で servo.attach 完了後、 NVS load 済 trim 値を attached servo に物理反映。
+  applyTrimsToActuators();
 }
 
 void loop() {
@@ -66,6 +89,96 @@ void loop() {
   userLoop();
 
   delay(10);
+}
+
+// ============================================
+// サーボトリム機能 (Phase D-3、Session 148、case 23 incident B 解消)
+// NVS namespace "servo_trim" (OTA template と整合)、 key schema = "count" + "s0"..."s7"
+// ============================================
+
+void loadServoTrims() {
+  trimPrefs.begin("servo_trim", true);  // Read-only
+  servoTrimCount = trimPrefs.getInt("count", 0);
+  if (servoTrimCount > MAX_SERVO_TRIM) servoTrimCount = MAX_SERVO_TRIM;
+  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
+    String key = "s" + String(i);
+    servoTrims[i] = trimPrefs.getInt(key.c_str(), 0);
+  }
+  trimPrefs.end();
+  Serial.printf("[TRIM] Loaded %d servo trims\n", servoTrimCount);
+}
+
+void saveServoTrims() {
+  trimPrefs.begin("servo_trim", false);  // Read-Write
+  trimPrefs.putInt("count", servoTrimCount);
+  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
+    String key = "s" + String(i);
+    trimPrefs.putInt(key.c_str(), servoTrims[i]);
+  }
+  trimPrefs.end();
+  Serial.println("[TRIM] Saved to NVS");
+}
+
+void setServoTrim(int index, int value) {
+  if (index >= 0 && index < MAX_SERVO_TRIM) {
+    servoTrims[index] = constrain(value, -30, 30);
+    if (index >= servoTrimCount) servoTrimCount = index + 1;
+    Serial.printf("[TRIM] Set servo %d trim to %d\n", index, servoTrims[index]);
+  }
+}
+
+int getServoTrim(int index) {
+  if (index >= 0 && index < MAX_SERVO_TRIM) {
+    return servoTrims[index];
+  }
+  return 0;
+}
+
+// 既 attached servo の中心位置 (90°) を trim 込みで再 write、
+// case 23 incident B 解消の核 consumer (servoTrims[] → servos[i].write)
+void applyTrimsToActuators() {
+  int applied = 0;
+  for (int i = 0; i < servoCount && i < USER_MAX_SERVOS && i < MAX_SERVO_TRIM; i++) {
+    if (servoPins[i] >= 0 && servos[i].attached()) {
+      servos[i].write(constrain(90 + servoTrims[i], 0, 180));
+      applied++;
+    }
+  }
+  Serial.printf("[TRIM] applyTrimsToActuators: %d attached servos\n", applied);
+}
+
+// ============================================
+// PID gain runtime accessor (Phase D-3、case 23 incident F transport-side 解消)
+// ============================================
+
+void setPidGain(String name, float kp, float ki, float kd) {
+  for (int i = 0; i < pidGainCount; i++) {
+    if (pidGains[i].name == name) {
+      pidGains[i].kp = kp; pidGains[i].ki = ki; pidGains[i].kd = kd;
+      Serial.printf("[PID] Updated %s: kp=%.4f ki=%.4f kd=%.4f\n", name.c_str(), kp, ki, kd);
+      return;
+    }
+  }
+  if (pidGainCount < MAX_PID_INSTANCES) {
+    pidGains[pidGainCount].name = name;
+    pidGains[pidGainCount].kp = kp;
+    pidGains[pidGainCount].ki = ki;
+    pidGains[pidGainCount].kd = kd;
+    pidGainCount++;
+    Serial.printf("[PID] Added %s: kp=%.4f ki=%.4f kd=%.4f\n", name.c_str(), kp, ki, kd);
+  } else {
+    Serial.println("[PID] ERROR: MAX_PID_INSTANCES reached");
+  }
+}
+
+bool getPidGain(String name, float& kp, float& ki, float& kd) {
+  for (int i = 0; i < pidGainCount; i++) {
+    if (pidGains[i].name == name) {
+      kp = pidGains[i].kp; ki = pidGains[i].ki; kd = pidGains[i].kd;
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -151,6 +264,81 @@ void processCommand(String command) {
     Serial.println("OK:RESETTING");
     delay(100);
     ESP.restart();
+
+  // ============================================
+  // Phase D-3 (Session 148、 case 23 incident B + F transport-side 解消):
+  // SET_TRIM / SET_TRIMS / GET_TRIMS / SAVE_TRIMS / TEST_TRIM / SET_PID line commands
+  // (SerialTrimTransport / SerialPidTransport から送信される command set、 59.md §1-4.3 verbatim)
+  // ============================================
+  } else if (command.startsWith("SET_TRIM:")) {
+    // 形式: SET_TRIM:index,value
+    String params = command.substring(9);
+    int commaIdx = params.indexOf(',');
+    if (commaIdx > 0) {
+      int index = params.substring(0, commaIdx).toInt();
+      int value = params.substring(commaIdx + 1).toInt();
+      setServoTrim(index, value);
+      Serial.println("OK:TRIM_SET");
+    } else {
+      Serial.println("ERROR:INVALID_TRIM");
+    }
+
+  } else if (command.startsWith("SET_TRIMS:")) {
+    // 形式: SET_TRIMS:v0,v1,v2,...
+    String values = command.substring(10);
+    int idx = 0;
+    int startPos = 0;
+    while (idx < MAX_SERVO_TRIM) {
+      int nextComma = values.indexOf(',', startPos);
+      String vStr = (nextComma < 0) ? values.substring(startPos) : values.substring(startPos, nextComma);
+      vStr.trim();
+      if (vStr.length() == 0) break;
+      servoTrims[idx++] = constrain(vStr.toInt(), -30, 30);
+      if (nextComma < 0) break;
+      startPos = nextComma + 1;
+    }
+    servoTrimCount = idx;
+    Serial.printf("OK:TRIMS_SET:%d\n", servoTrimCount);
+
+  } else if (command == "GET_TRIMS") {
+    Serial.print("OK:TRIMS=");
+    for (int i = 0; i < servoTrimCount; i++) {
+      if (i > 0) Serial.print(",");
+      Serial.print(servoTrims[i]);
+    }
+    Serial.println();
+
+  } else if (command == "SAVE_TRIMS") {
+    saveServoTrims();
+    applyTrimsToActuators();  // case 23 incident B: NVS write 直後に consumer 起動
+    Serial.println("OK:TRIMS_SAVED");
+
+  } else if (command.startsWith("TEST_TRIM:")) {
+    // 形式: TEST_TRIM:action[,index]
+    String params = command.substring(10);
+    int commaIdx = params.indexOf(',');
+    String action = (commaIdx < 0) ? params : params.substring(0, commaIdx);
+    action.trim();
+    int index = (commaIdx > 0) ? params.substring(commaIdx + 1).toInt() : -1;
+    Serial.printf("[TRIM] Test action: %s, index: %d\n", action.c_str(), index);
+    Serial.println("OK:TEST_OK");
+
+  } else if (command.startsWith("SET_PID:")) {
+    // 形式: SET_PID:name,kp,ki,kd
+    String params = command.substring(8);
+    int c1 = params.indexOf(',');
+    int c2 = (c1 >= 0) ? params.indexOf(',', c1 + 1) : -1;
+    int c3 = (c2 >= 0) ? params.indexOf(',', c2 + 1) : -1;
+    if (c1 > 0 && c2 > c1 && c3 > c2) {
+      String name = params.substring(0, c1);
+      float kp = params.substring(c1 + 1, c2).toFloat();
+      float ki = params.substring(c2 + 1, c3).toFloat();
+      float kd = params.substring(c3 + 1).toFloat();
+      setPidGain(name, kp, ki, kd);
+      Serial.println("OK:PID_SET");
+    } else {
+      Serial.println("ERROR:INVALID_PID");
+    }
 
   } else {
     // 未知のコマンド

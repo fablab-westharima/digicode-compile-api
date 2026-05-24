@@ -69,6 +69,14 @@ int servoTrims[MAX_SERVO_TRIM] = {0};
 int servoTrimCount = 0;
 Preferences trimPrefs;
 
+// ============================================
+// PID gain runtime override (Phase D-3、Session 148、case 23 incident F transport-side 解消)
+// ============================================
+#define MAX_PID_INSTANCES 4
+struct PidGainEntry { String name; float kp; float ki; float kd; };
+PidGainEntry pidGains[MAX_PID_INSTANCES];
+int pidGainCount = 0;
+
 // 内蔵LED設定（ESP32では通常GPIO2）
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 2
@@ -225,6 +233,12 @@ void setup() {
 
   // ユーザー初期化コード
   userSetup();
+
+  // Phase D-3 (Session 148、 case 23 incident B 解消):
+  // userSetup() で servo.attach 完了後、 NVS から load 済 trim 値を physical 反映。
+  // 純粋な servo.write user code に対しては明示 getServoTrim(i) call が必要だが、
+  // DigiMotion::ServoChannel180 経由 user code の場合は _writeHw() で自動 apply される。
+  applyTrimsToActuators();
 }
 
 void loop() {
@@ -513,6 +527,60 @@ void setServoTrimCount(int count) {
   Serial.printf("[TRIM] Servo count set to %d\n", servoTrimCount);
 }
 
+// ============================================
+// applyTrimsToActuators (Phase D-3、Session 148、case 23 incident B 解消 commit)
+// ============================================
+// servoTrims[] 配列の consumer = 起動時 + /trim/save 後に呼出、
+// 旧 /trim/test endpoint コメント「user code 任せ、 ファームウェアレベルではログ出力のみ」 状態を解消。
+// OTA template は user code 側で servo declare するため、 ここでは servoTrims[] を Serial に出力して
+// (a) consumer ≥ 1 件確立、 (b) user code (または将来 DigiMotion::ServoChannel180::_writeHw) が
+// getServoTrim(i) で読み出して physical servo 反映、 という 2 段 path を確立する。
+// 純粋な servo.write を直接呼ぶ user code は user が明示的に getServoTrim(i) を呼ぶ必要あり。
+void applyTrimsToActuators() {
+  Serial.print("[TRIM] applyTrimsToActuators (ch=trim): ");
+  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
+    Serial.printf("%d=%+d ", i, servoTrims[i]);
+  }
+  Serial.println();
+}
+
+// ============================================
+// PID gain runtime accessor (Phase D-3、Session 148、case 23 incident F transport-side 解消)
+// ============================================
+// pidGains[] 配列への setter / getter。 user code (Blockly 生成 cpp) が getPidGain(name, kp, ki, kd)
+// で runtime 値を read して pid_compute 等に渡す path を確立。
+// Phase B-3 で pidBlocks pid_init generator が getPidGains() → pidTuningStore 値を emit、
+// 本 D-3 で transport 経由 runtime 上書き path 完成 = 3 層 (store / generator / transport) 全件解消。
+void setPidGain(String name, float kp, float ki, float kd) {
+  for (int i = 0; i < pidGainCount; i++) {
+    if (pidGains[i].name == name) {
+      pidGains[i].kp = kp; pidGains[i].ki = ki; pidGains[i].kd = kd;
+      Serial.printf("[PID] Updated %s: kp=%.4f ki=%.4f kd=%.4f\n", name.c_str(), kp, ki, kd);
+      return;
+    }
+  }
+  if (pidGainCount < MAX_PID_INSTANCES) {
+    pidGains[pidGainCount].name = name;
+    pidGains[pidGainCount].kp = kp;
+    pidGains[pidGainCount].ki = ki;
+    pidGains[pidGainCount].kd = kd;
+    pidGainCount++;
+    Serial.printf("[PID] Added %s: kp=%.4f ki=%.4f kd=%.4f\n", name.c_str(), kp, ki, kd);
+  } else {
+    Serial.println("[PID] ERROR: MAX_PID_INSTANCES reached");
+  }
+}
+
+bool getPidGain(String name, float& kp, float& ki, float& kd) {
+  for (int i = 0; i < pidGainCount; i++) {
+    if (pidGains[i].name == name) {
+      kp = pidGains[i].kp; ki = pidGains[i].ki; kd = pidGains[i].kd;
+      return true;
+    }
+  }
+  return false;
+}
+
 // 簡易JSON数値パース（"key":value形式）
 int parseJsonInt(String json, String key) {
   String searchKey = "\"" + key + "\":";
@@ -532,6 +600,41 @@ int parseJsonInt(String json, String key) {
   String valueStr = json.substring(valueStart, valueEnd);
   valueStr.trim();
   return valueStr.toInt();
+}
+
+// 簡易JSON浮動小数点パース（Phase D-3、/pid endpoint 用）
+// "key":value 形式、 not found 時は default を返す
+float parseJsonFloat(String json, String key, float defaultValue) {
+  String searchKey = "\"" + key + "\":";
+  int keyIndex = json.indexOf(searchKey);
+  if (keyIndex < 0) return defaultValue;
+
+  int valueStart = keyIndex + searchKey.length();
+  int valueEnd = valueStart;
+
+  while (valueEnd < json.length()) {
+    char c = json.charAt(valueEnd);
+    if (c == ',' || c == '}' || c == ']') break;
+    valueEnd++;
+  }
+
+  String valueStr = json.substring(valueStart, valueEnd);
+  valueStr.trim();
+  return valueStr.toFloat();
+}
+
+// 簡易JSON文字列パース（Phase D-3、/pid endpoint 用）
+// "key":"value" 形式、 not found 時は empty String を返す
+String parseJsonString(String json, String key) {
+  String searchKey = "\"" + key + "\":\"";
+  int keyIndex = json.indexOf(searchKey);
+  if (keyIndex < 0) return String("");
+
+  int valueStart = keyIndex + searchKey.length();
+  int valueEnd = json.indexOf("\"", valueStart);
+  if (valueEnd < 0) return String("");
+
+  return json.substring(valueStart, valueEnd);
 }
 
 // 簡易JSON配列パース（"key":[n,n,n]形式）
@@ -1370,10 +1473,11 @@ void setupWebServer() {
     server.send(204);
   });
 
-  // POST /trim/save - NVSに永続保存
+  // POST /trim/save - NVSに永続保存 + 物理サーボへ反映 (Phase D-3、case 23 incident B 解消)
   server.on("/trim/save", HTTP_POST, [](){
     sendCORSHeaders();
     saveServoTrims();
+    applyTrimsToActuators();  // case 23 incident B: NVS write 直後に consumer 起動
     server.send(200, "application/json", "{\"success\":true}");
   });
 
@@ -1448,6 +1552,37 @@ void setupWebServer() {
     } else {
       server.send(400, "application/json", "{\"error\":\"Invalid count\"}");
     }
+  });
+
+  // ============================================
+  // PID gain APIエンドポイント (Phase D-3、Session 148、case 23 incident F transport-side 解消)
+  // ============================================
+
+  // CORS Preflight: /pid
+  server.on("/pid", HTTP_OPTIONS, [](){
+    sendCORSHeaders();
+    server.send(204);
+  });
+
+  // POST /pid - PID gain runtime 更新
+  // Body: {"name":"default","kp":0.5,"ki":0.001,"kd":10}
+  server.on("/pid", HTTP_POST, [](){
+    sendCORSHeaders();
+    if (!server.hasArg("plain")) {
+      server.send(400, "application/json", "{\"error\":\"No body\"}");
+      return;
+    }
+    String body = server.arg("plain");
+    Serial.println("[PID] POST /pid: " + body);
+
+    String name = parseJsonString(body, "name");
+    if (name.length() == 0) name = "default";
+    float kp = parseJsonFloat(body, "kp", 0.0);
+    float ki = parseJsonFloat(body, "ki", 0.0);
+    float kd = parseJsonFloat(body, "kd", 0.0);
+
+    setPidGain(name, kp, ki, kd);
+    server.send(200, "application/json", "{\"success\":true,\"name\":\"" + name + "\"}");
   });
 
   server.begin();
