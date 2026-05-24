@@ -60,6 +60,8 @@
 #include <motion/ChannelBank.h>
 #include <motion/SineOscillator.h>
 #include <trim/ITrimStore.h>
+#include <sound/IBuzzer.h>
+#include <sound/GestureLibrary.h>
 
 #ifdef ARDUINO_ARCH_ESP32
   #include <Arduino.h>
@@ -84,7 +86,8 @@ public:
         MOTION_DANCE,
         MOTION_SWING,
         MOTION_BEND,
-        MOTION_MOONWALK
+        MOTION_MOONWALK,
+        MOTION_GESTURE        // Phase A-ε-2: gesture-driven sine motion
     };
 
     static constexpr int HOME_DEG = 90;
@@ -96,7 +99,8 @@ public:
           _initialSteps(0),
           _direction(1),
           _motionStartMs(0),
-          _periodMs(MIN_PERIOD_MS) {
+          _periodMs(MIN_PERIOD_MS),
+          _buzzer(nullptr) {
         for (int i = 0; i < CHANNEL_COUNT; ++i) _channels[i] = nullptr;
     }
 
@@ -226,6 +230,31 @@ public:
     void moonwalkBlocking(int cycles, int speed)              { moonwalkAsync(cycles, speed, _getNowMs()); _blockingPoll(); }
     void waitUntilIdle()                                      { _blockingPoll(); }
 
+    // === gesture API (Phase A-ε-2, D-new-1) ===
+    // Optional buzzer attach. Pass nullptr to detach. Caller owns the
+    // buzzer instance; DigiBiped only holds the pointer. Phase B-3
+    // generator emit pattern:
+    //     getBuzzer().attach(BUZZER_PIN);
+    //     biped.attachBuzzer(&getBuzzer());
+    void attachBuzzer(IBuzzer* buzzer) { _buzzer = buzzer; }
+    IBuzzer* attachedBuzzer() const    { return _buzzer; }
+
+    // Look up the (motion + sound) pair for `id` and start both. The
+    // motion is async (sine oscillators run until cycles complete in
+    // tick()); the sound dispatches immediately and is blocking on ESP32
+    // for the preset's total duration. GESTURE_NONE / out-of-range id is
+    // a no-op. If no buzzer is attached, the sound half is silently
+    // skipped — motion still runs.
+    void playGesture(GestureId id, unsigned long nowMs) {
+        const GestureDefinition& def = GestureLibrary::get(id);
+        if (def.motion.cycles > 0 && def.motion.periodMs > 0) {
+            _setupGestureMotion(def.motion, nowMs);
+        }
+        if (_buzzer != nullptr && def.sound != BEEP_NONE) {
+            _buzzer->playPreset(def.sound);
+        }
+    }
+
     // === query ===
     bool isIdle() const           { return _motion == MOTION_IDLE; }
     MotionId currentMotion() const { return _motion; }
@@ -281,6 +310,7 @@ private:
     int _direction;
     unsigned long _motionStartMs;
     unsigned long _periodMs;
+    IBuzzer* _buzzer;
 
     // Motion shapes: amplitude (deg) and phase (rad) per channel.
     // All values numerically distinct from Otto::walk's hardcoded
@@ -382,6 +412,28 @@ private:
             _osc[i].setOffset(HOME_DEG);
             _osc[i].setPeriod(_periodMs);
             _osc[i].setPhase(s.phase[i]);
+            _osc[i].start(nowMs);
+        }
+    }
+
+    // Phase A-ε-2 gesture setup: takes GesturePattern directly (no static
+    // _shapeFor lookup needed since gestures are runtime-table-driven).
+    // Period taken verbatim from the table; cycle-completion path in
+    // tick() handles the rest. Direction is fixed at +1 (gesture amps are
+    // signed at the table level — negative for lean-forward effects).
+    void _setupGestureMotion(const GesturePattern& gp, unsigned long nowMs) {
+        _motion = MOTION_GESTURE;
+        _stepsRemaining = (gp.cycles > 0) ? gp.cycles : 1;
+        _initialSteps = _stepsRemaining;
+        _direction = 1;
+        _motionStartMs = nowMs;
+        _periodMs = (gp.periodMs > 0) ? (unsigned long)gp.periodMs : MIN_PERIOD_MS;
+        if (_periodMs < MIN_PERIOD_MS) _periodMs = MIN_PERIOD_MS;
+        for (int i = 0; i < CHANNEL_COUNT; ++i) {
+            _osc[i].setAmplitude(gp.amp[i]);
+            _osc[i].setOffset(HOME_DEG);
+            _osc[i].setPeriod(_periodMs);
+            _osc[i].setPhase(gp.phase[i]);
             _osc[i].start(nowMs);
         }
     }
