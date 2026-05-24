@@ -53,3 +53,25 @@ Additional dependency added in Phase A-gamma: `gin66/FastAccelStepper@^0.32` (MI
 ## Testing
 
 Host-side cpp unit tests via PlatformIO native env + GoogleTest. See `test/platformio.ini`. From `libs/DigiMotion/test/`, run: `pio test -e native -f test_hello` (PIO filter matches test-directory name, which is `test_<descriptive>` per PIO convention; the file inside is `hello_test.cpp`). Future subsystem tests follow the same pattern: `test/test_<subsystem>/<descriptive>.cpp` + filter `-f test_<subsystem>`.
+
+Phase A-gamma test groups: `test_pump` (Layer 1 IBackgroundPump, 7 cases), `test_actuator_channels` (Layer 2 IActuatorChannel + 6 channel types, 34 cases). Run all together: `pio test -e native -f test_hello -f test_pump -f test_actuator_channels`.
+
+## Platform abstraction gate
+
+`tools/check-platform-abstraction.sh` enforces the per-layer rules in 59.md §1.0.1 + D-new-2 (RP2040 future portability). Layer 2 (`src/actuator/`) may use ESP32-specific HW APIs (LEDC, ESP32Servo, FastAccelStepper, AccelStepper) inside `#ifdef ARDUINO_ARCH_ESP32` blocks because the channel classes are the platform-specific leaves of the design — but Layer 2 MUST NOT spawn FreeRTOS tasks directly (that is Layer 1's job, in `FreeRtosBackgroundPump_esp32.cpp`). Layer 3+ (`src/motion`, `src/sound`, `src/trim`) MUST be platform-agnostic: no FreeRTOS API, no LEDC, no ESP32Servo, no FastAccelStepper, no AccelStepper, no `freertos/` includes.
+
+Run before every commit that touches the lib:
+
+```bash
+bash libs/DigiMotion/tools/check-platform-abstraction.sh
+```
+
+Exit 0 = clean. Exit 1 = violations listed.
+
+### Adding a new platform (e.g. RP2040)
+
+1. **Layer 1** — drop a sibling `SdkAlarmBackgroundPump_rp2040.cpp` under `src/pump/`, guarded by `#ifdef ARDUINO_ARCH_RP2040`. Override `start()/stop()` with `add_repeating_timer_ms` (or equivalent); the registry + scan logic in `PortableBackgroundPump` is reused as-is.
+2. **Layer 2** — add platform-specific channel variants under `src/actuator/` (e.g. `ServoChannel180_rp2040.cpp` using `Servo` from arduino-pico; `DcMotorChannel_rp2040.cpp` using RP2040 PWM slices). Each variant guarded by its own `#ifdef ARDUINO_ARCH_RP2040`. The header IFs (`IActuatorChannel.h`, `ServoChannel180.h`, etc.) stay shared.
+3. **Layer 3+** — **no changes required**. `ChannelBank`, `SineOscillator`, `LinearInterpolator`, `GestureLibrary`, `DigiBuzzer`, `TrimStore` all consume the abstract IFs only.
+
+The guard script's structure scales to any platform — extend the `forbidden API` patterns if the new platform introduces a SDK-level API that should not leak into Layer 3+.
