@@ -165,6 +165,24 @@ const COMMON_REGISTRY_LIBS: readonly string[] = [
   // (latest 1.64, Nov 2022). Same systematic root cause as commits 2-4/2-7/2-10
   // (block added without lib_deps registration in compile.ts).
   'waspinator/AccelStepper@^1.64', // a4988 + uln2003 stepper drivers (52.md commit #5)
+  // Phase A-γ commit 2 (Session 141, 60.md §1 + §8): FastAccelStepper@^0.32
+  // for the new DigiMotion StepperHwChannel which drives the STEP pin via
+  // ESP32 RMT/MCPWM/PCNT peripherals (~200 kHz, no CPU tick), versus
+  // AccelStepper's polling .run() (~1 kHz max). Both coexist: user code
+  // (or robot blocks) chooses which channel type to instantiate.
+  //
+  // rule 15 lib-adoption-protocol 4-axis verify (60.md §8 verbatim):
+  // - License: MIT (Copyright (c) 2020 J.Kiemes), verbatim LICENSE file
+  //   read; SPDX=MIT; AGPL-3.0-compatible (permissive)
+  // - Candidate comparison: AccelStepper (GPL-3/Commercial dual, polling)
+  //   vs FastAccelStepper (MIT single, HW peripheral); both kept, different
+  //   block emits choose per use case
+  // - Maintenance: last update 2026-05-23 (active), 492 stars, 15 open
+  //   issues, single maintainer
+  // - Dependency: standalone (depends field absent in library.properties);
+  //   transitive deps = none; architectures = avr,esp32,sam,rp2040,rp2350
+  //   (D-new-2 future portability bonus)
+  'gin66/FastAccelStepper@^0.32', // HW-peripheral stepper (Phase A-γ, D9)
   // BUG-059 closure (2026-04-30): 技適制約により I2C 版 RFID lib 一択。
   // miguelbalboa/MFRC522 (SPI) と MakerSpaceLeiden/rfid (SPI/I2C/UART) は
   // 両方とも `class MFRC522` を提供し arozcan と link collision するため drop。
