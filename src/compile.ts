@@ -265,6 +265,17 @@ export function buildLibDeps(libsDir: string, _target: { platform: string }): st
     `file://${libsDir}/DigiCodeHumanoid`,
     `file://${libsDir}/DigiCodeTransform`,
     `file://${libsDir}/DigiCodeWheel`,
+    // Phase A-ε commit 2 (Session 143): new Layer 5 robot libs alongside
+    // the legacy DigiCode* trio. DigiMotion (Layer 0-4) is NOT yet listed
+    // here — Phase A-ζ adds it together with FastAccelStepper and removes
+    // the legacy trio in a single docker-rebuild cycle. Until then these
+    // 3 entries are listed but production compilation will not pick them
+    // up since DigiMotion's headers are not on the include path of the
+    // production lib_deps set. Production smoke for the new libs runs
+    // only after Phase A-ζ.
+    `file://${libsDir}/DigiBiped`,
+    `file://${libsDir}/DigiMorpher`,
+    `file://${libsDir}/DigiRover`,
     `file://${libsDir}/ESP32Servo`,
     `file://${libsDir}/NimBLE-Arduino`,
     `file://${libsDir}/NimBLEOta`,
