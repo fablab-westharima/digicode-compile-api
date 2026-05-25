@@ -158,7 +158,26 @@ protected:
     bool _attached = false;
 
 #ifdef ARDUINO_ARCH_ESP32
-    AccelStepper _stepper;
+    // mutable: const-correctness adapter for non-const AccelStepper query
+    // methods (currentPosition() / distanceToGo()) called from const member
+    // functions (getCurrent() / hasReachedTarget(), IActuatorChannel virtual
+    // override contract). AccelStepper lib does not declare these query
+    // methods const despite their read-only semantics, so we mark the field
+    // mutable to satisfy the const member function's discard-qualifier
+    // requirement without changing the IActuatorChannel virtual signature
+    // (which would cascade to all 6 concrete channel classes). StepperHwChannel
+    // uses pointer field (FastAccelStepper*) and does not need this adapter
+    // (pointer-to-non-const is mutable inside const member by C++ rules).
+    //
+    // Bug source: Session 154 X-6 1000-case orchestrator at 250/1000 = 17 fail,
+    // all m5stack-basic singleton, all stderr `passing 'const AccelStepper' as
+    // 'this' argument discards qualifiers [-fpermissive]` at L102 + L109.
+    // case 14 罠 7 度目 candidate (production smoke = audit 自己再帰 6 度目
+    // production layer の追加で発覚): host pio test 128 PASS は ARDUINO_ARCH_ESP32
+    // guard 外 native build で ESP32 branch を未 compile = const-correctness
+    // violation を skip、 production ESP32 build で初発覚。 cluster audit (DigiMotion
+    // lib 全 24 file) で同根なし = この 1 file 1 line fix で完結。
+    mutable AccelStepper _stepper;
 #endif
 };
 
