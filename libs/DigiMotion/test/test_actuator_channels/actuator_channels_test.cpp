@@ -401,6 +401,132 @@ TEST(DcMotor, TrimBoostCapsAtFullDuty) {
 }
 
 // ============================================================================
+// Reverse semantics (Phase 3-A Session 156, Q-B=(ii) Q-C=(i) self-managed
+// _reverse flag uniform across all 6 channels; founding use case = Humanoid
+// physical mounting orientation correction without runtime transport)
+// ============================================================================
+
+TEST(ServoChannel180, ReverseDefaultsToFalse) {
+    ServoChannel180 ch(27);
+    EXPECT_FALSE(ch.getReverse());
+}
+
+TEST(ServoChannel180, ReverseMirrorsAngleAroundANGLE_MAX) {
+    ServoChannel180 ch(27);
+    ch.attach();
+    ch.setReverse(true);
+    EXPECT_TRUE(ch.getReverse());
+    ch.setTarget(170);
+    ch.pump(0);
+    // user-facing _current stays 170; HW write is mirrored 180 - 170 = 10
+    EXPECT_EQ(ch.getCurrent(), 170);
+    EXPECT_EQ(ch.getLastWrittenHw(), 10);
+}
+
+TEST(ServoChannel180, ReverseWithTrimAppliesMirrorThenTrim) {
+    ServoChannel180 ch(27);
+    ch.attach();
+    ch.setTrim(5);
+    ch.setReverse(true);
+    ch.setTarget(170);
+    ch.pump(0);
+    // mirror = 180 - 170 = 10, then + trim 5 → HW = 15
+    EXPECT_EQ(ch.getLastWrittenHw(), 15);
+}
+
+TEST(ServoChannel180, ReverseToggleReappliesHwImmediately) {
+    ServoChannel180 ch(27);
+    ch.attach();
+    ch.setTarget(120);
+    ch.pump(0);
+    EXPECT_EQ(ch.getLastWrittenHw(), 120);
+    ch.setReverse(true);  // setReverse re-writes HW immediately like setTrim
+    EXPECT_EQ(ch.getLastWrittenHw(), 60);  // mirror = 180 - 120
+    ch.setReverse(false);
+    EXPECT_EQ(ch.getLastWrittenHw(), 120);
+}
+
+TEST(ServoChannel270, ReverseMirrorsAngleAroundANGLE_MAX) {
+    ServoChannel270 ch(14);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(200);
+    ch.pump(0);
+    // mirror = 270 - 200 = 70
+    EXPECT_EQ(ch.getLastWrittenHw(), 70);
+}
+
+TEST(ContinuousServo, ReverseFlipsVelocitySign) {
+    ContinuousServoChannel ch(15);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(50);
+    ch.pump(0);
+    // velocity sign flipped: +50 → -50
+    // angle = 90 + (-50 * 90 / 100) = 90 - 45 = 45
+    EXPECT_EQ(ch.getLastWrittenHw(), 45);
+}
+
+TEST(ContinuousServo, ReverseFullForwardBecomesFullReverse) {
+    ContinuousServoChannel ch(15);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(100);
+    ch.pump(0);
+    EXPECT_EQ(ch.getLastWrittenHw(), 0);  // = DEG_MIN, reverse of full forward
+}
+
+TEST(StepperPoll, ReverseFlipsTargetInLastWrittenHw) {
+    StepperPollChannel ch(26, 25);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(200);
+    ch.pump(0);
+    // internal: -200 + trim 0 = -200 (the value sent to AccelStepper::moveTo)
+    EXPECT_EQ(ch.getLastWrittenHw(), -200);
+}
+
+TEST(StepperPoll, ReverseWithTrimFlipsThenAdds) {
+    StepperPollChannel ch(26, 25);
+    ch.attach();
+    ch.setTrim(3);
+    ch.setReverse(true);
+    ch.setTarget(200);
+    ch.pump(0);
+    // internal: -200 + 3 = -197
+    EXPECT_EQ(ch.getLastWrittenHw(), -197);
+}
+
+TEST(StepperHw, ReverseFlipsTargetInLastWrittenHw) {
+    StepperHwChannel ch(26, 25);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(1000);
+    ch.pump(0);
+    // internal moveTo: -1000 + trim 0 = -1000
+    EXPECT_EQ(ch.getLastWrittenHw(), -1000);
+}
+
+TEST(DcMotor, ReverseFlipsDirectionSign) {
+    DcMotorChannel ch(16, 17);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(50);
+    ch.pump(0);
+    // velocity sign flip: +50 → -50 → magnitude 50, duty = 127, reverse sign
+    EXPECT_EQ(ch.getLastWrittenHw(), -127);
+}
+
+TEST(DcMotor, ReverseAtZeroVelocityStillWritesZero) {
+    DcMotorChannel ch(16, 17);
+    ch.attach();
+    ch.setReverse(true);
+    ch.setTarget(0);
+    ch.pump(0);
+    EXPECT_EQ(ch.getLastWrittenHw(), 0);  // 0 sign-flip is still 0
+}
+
+// ============================================================================
 // Cross-cutting integration: rule 18 §Discipline 5 same-domain coverage spot
 // (3-axis settings are uniformly observable across all 6 channel types)
 // ============================================================================
@@ -427,6 +553,31 @@ TEST(AllChannels, ThreeAxisGettersRespondUniformly) {
     sp.setTrim(10);    EXPECT_EQ(sp.getTrim(), 10);
     sh.setTrim(-5);    EXPECT_EQ(sh.getTrim(), -5);
     dc.setTrim(15);    EXPECT_EQ(dc.getTrim(), 15);
+}
+
+TEST(AllChannels, ReverseGettersRespondUniformly) {
+    ServoChannel180 s180(27);
+    ServoChannel270 s270(14);
+    ContinuousServoChannel cs(15);
+    StepperPollChannel sp(26, 25);
+    StepperHwChannel sh(26, 25);
+    DcMotorChannel dc(16, 17);
+
+    IActuatorChannel* channels[] = { &s180, &s270, &cs, &sp, &sh, &dc };
+    // Default = false (R1 invariant: existing code unchanged)
+    for (auto* ch : channels) {
+        EXPECT_FALSE(ch->getReverse());
+    }
+    // setReverse(true) → getReverse=true uniform across all 6 channels
+    for (auto* ch : channels) {
+        ch->setReverse(true);
+        EXPECT_TRUE(ch->getReverse());
+    }
+    // Round-trip back to false
+    for (auto* ch : channels) {
+        ch->setReverse(false);
+        EXPECT_FALSE(ch->getReverse());
+    }
 }
 
 int main(int argc, char **argv) {

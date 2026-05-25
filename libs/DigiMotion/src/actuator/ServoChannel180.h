@@ -81,11 +81,16 @@ public:
         // visible without waiting for next target change.
         if (_attached) _writeHw(_current);
     }
+    void setReverse(bool reverse) override {
+        _reverse = reverse;
+        if (_attached) _writeHw(_current);
+    }
 
     int getPulseMin() const override { return _pulseMin; }
     int getPulseMax() const override { return _pulseMax; }
     int getMaxRate() const override { return _maxRate; }
     int getTrim() const override { return _trim; }
+    bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     // === IPumpable ===
@@ -107,10 +112,14 @@ public:
     }
 
 protected:
-    // virtual so test code MAY override; default impl applies trim + clamp +
-    // (on ESP32) Servo::write. Captures the final value in _lastWrittenHw
-    // regardless of platform.
+    // virtual so test code MAY override; default impl applies reverse mirror,
+    // then trim + clamp + (on ESP32) Servo::write. Captures the final value
+    // in _lastWrittenHw regardless of platform.
+    // Phase 3-A: reverse mirror around mid-point (180 - valueDeg) compensates
+    // for physically inverted servo mounting. Applied BEFORE trim so trim
+    // remains a user-facing offset on the user-facing angle.
     virtual void _writeHw(int valueDeg) {
+        if (_reverse) valueDeg = ANGLE_MAX - valueDeg;
         int trimmed = valueDeg + _trim;
         if (trimmed < ANGLE_MIN) trimmed = ANGLE_MIN;
         if (trimmed > ANGLE_MAX) trimmed = ANGLE_MAX;
@@ -125,6 +134,7 @@ protected:
     int _pulseMax = DEFAULT_PULSE_MAX_US;
     int _maxRate = 0;       // 0 = unlimited
     int _trim = 0;
+    bool _reverse = false;
     int _target = 90;
     int _current = 90;
     int _lastWrittenHw = -1;

@@ -22,6 +22,8 @@ public:
     int  setTargetCalls = 0;
     int  lastSetTrim = -999;
     int  setTrimCalls = 0;
+    bool lastReverse = false;
+    int  setReverseCalls = 0;
     int  attachCalls = 0;
     bool attached = false;
     bool reachedFlag = true;
@@ -36,10 +38,12 @@ public:
     void setPulseRange(int, int) override {}
     void setMaxRate(int) override {}
     void setTrim(int v) override { lastSetTrim = v; ++setTrimCalls; }
+    void setReverse(bool r) override { lastReverse = r; ++setReverseCalls; }
     int getPulseMin() const override { return 0; }
     int getPulseMax() const override { return 0; }
     int getMaxRate() const override  { return 0; }
     int getTrim() const override     { return lastSetTrim; }
+    bool getReverse() const override { return lastReverse; }
     int getLastWrittenHw() const override { return 0; }
     void pump(unsigned long) override {}
     bool isActive() const override { return attached && !reachedFlag; }

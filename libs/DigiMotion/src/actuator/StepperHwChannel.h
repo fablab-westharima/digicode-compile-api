@@ -67,16 +67,25 @@ public:
     }
     bool isAttached() const override { return _attached; }
 
+    // Phase 3-A: same user-facing semantics as StepperPollChannel.
+    // setTarget(N) → moveTo((_reverse ? -N : N) + trim); getCurrent reads
+    // FastAccelStepper position and mirrors back if _reverse.
     void setTarget(long target) override {
         _target = target;
 #ifdef ARDUINO_ARCH_ESP32
-        if (_attached && _stepper) _stepper->moveTo(_target + _trim);
+        if (_attached && _stepper) {
+            long effective = _reverse ? -_target : _target;
+            _stepper->moveTo(effective + _trim);
+        }
 #endif
     }
     long getTarget() const override { return _target; }
     long getCurrent() const override {
 #ifdef ARDUINO_ARCH_ESP32
-        if (_attached && _stepper) return _stepper->getCurrentPosition();
+        if (_attached && _stepper) {
+            long internal = _stepper->getCurrentPosition();
+            return _reverse ? -internal : internal;
+        }
 #endif
         return _current;
     }
@@ -98,11 +107,21 @@ public:
 #endif
     }
     void setTrim(int offsetSteps) override { _trim = offsetSteps; }
+    void setReverse(bool reverse) override {
+        _reverse = reverse;
+#ifdef ARDUINO_ARCH_ESP32
+        if (_attached && _stepper) {
+            long effective = _reverse ? -_target : _target;
+            _stepper->moveTo(effective + _trim);
+        }
+#endif
+    }
 
     int getPulseMin() const override { return 0; }
     int getPulseMax() const override { return 0; }
     int getMaxRate() const override { return _maxRate; }
     int getTrim() const override { return _trim; }
+    bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     bool isActive() const override {
@@ -115,11 +134,15 @@ public:
     void pump(unsigned long /*nowMs*/) override {
         if (!_attached) return;
 #ifdef ARDUINO_ARCH_ESP32
-        if (_stepper) _current = _stepper->getCurrentPosition();
+        if (_stepper) {
+            long internalPos = _stepper->getCurrentPosition();
+            _current = _reverse ? -internalPos : internalPos;
+        }
 #else
         _current = _target;
 #endif
-        _lastWrittenHw = (int)(_target + _trim);
+        long internalWritten = (_reverse ? -_target : _target) + _trim;
+        _lastWrittenHw = (int)internalWritten;
     }
 
 protected:
@@ -128,6 +151,7 @@ protected:
     int _enablePin;
     int _maxRate = 0;
     int _trim = 0;
+    bool _reverse = false;
     long _target = 0;
     long _current = 0;
     int _lastWrittenHw = 0;

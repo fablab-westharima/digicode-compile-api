@@ -29,6 +29,8 @@ public:
     int  setTargetCalls = 0;
     int  lastSetTrim = -999;
     int  setTrimCalls = 0;
+    bool lastReverse = false;
+    int  setReverseCalls = 0;
     int  lastPulseMin = -1;
     int  lastPulseMax = -1;
     int  setPulseRangeCalls = 0;
@@ -63,11 +65,16 @@ public:
         lastSetTrim = v;
         ++setTrimCalls;
     }
+    void setReverse(bool r) override {
+        lastReverse = r;
+        ++setReverseCalls;
+    }
 
     int getPulseMin() const override { return lastPulseMin; }
     int getPulseMax() const override { return lastPulseMax; }
     int getMaxRate() const override  { return lastMaxRate; }
     int getTrim() const override     { return lastSetTrim; }
+    bool getReverse() const override { return lastReverse; }
     int getLastWrittenHw() const override { return 0; }
 
     void pump(unsigned long) override {}

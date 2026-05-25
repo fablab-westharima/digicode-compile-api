@@ -72,11 +72,16 @@ public:
         _trim = offsetDeg;
         if (_attached) _writeHw(_current);
     }
+    void setReverse(bool reverse) override {
+        _reverse = reverse;
+        if (_attached) _writeHw(_current);
+    }
 
     int getPulseMin() const override { return _pulseMin; }
     int getPulseMax() const override { return _pulseMax; }
     int getMaxRate() const override { return _maxRate; }
     int getTrim() const override { return _trim; }
+    bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     bool isActive() const override { return _attached && _current != _target; }
@@ -97,7 +102,10 @@ public:
     }
 
 protected:
+    // Phase 3-A: reverse mirror around ANGLE_MAX (270 - valueDeg) compensates
+    // for physically inverted 270° servo mounting. Applied BEFORE trim.
     virtual void _writeHw(int valueDeg) {
+        if (_reverse) valueDeg = ANGLE_MAX - valueDeg;
         int trimmed = valueDeg + _trim;
         if (trimmed < ANGLE_MIN) trimmed = ANGLE_MIN;
         if (trimmed > ANGLE_MAX) trimmed = ANGLE_MAX;
@@ -112,6 +120,7 @@ protected:
     int _pulseMax = DEFAULT_PULSE_MAX_US;
     int _maxRate = 0;
     int _trim = 0;
+    bool _reverse = false;
     int _target = 135;       // mid-range for 270° servo
     int _current = 135;
     int _lastWrittenHw = -1;

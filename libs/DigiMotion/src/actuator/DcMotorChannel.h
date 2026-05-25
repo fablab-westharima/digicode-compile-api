@@ -81,11 +81,16 @@ public:
         // visibly responds to trim change without waiting for next setTarget.
         if (_attached) _writeHw(_current);
     }
+    void setReverse(bool reverse) override {
+        _reverse = reverse;
+        if (_attached) _writeHw(_current);
+    }
 
     int getPulseMin() const override { return 0; }
     int getPulseMax() const override { return 0; }
     int getMaxRate() const override { return _maxRate; }
     int getTrim() const override { return _trim; }
+    bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     bool isActive() const override { return _attached && _current != _target; }
@@ -108,7 +113,10 @@ public:
 protected:
     // Apply deadband-aware mapping and write to H-bridge pins.
     // sign(v) selected direction; |v| + trim (capped at 100) → duty.
+    // Phase 3-A: reverse=true → velocity sign flip (= H-bridge forward/reverse
+    // pin swap effect, no field reordering).
     virtual void _writeHw(int velocityPercent) {
+        if (_reverse) velocityPercent = -velocityPercent;
         if (velocityPercent == 0) {
             _lastWrittenHw = 0;
 #ifdef ARDUINO_ARCH_ESP32
@@ -146,6 +154,7 @@ protected:
     int _reversePin;
     int _maxRate = 0;
     int _trim = 0;
+    bool _reverse = false;
     int _target = 0;
     int _current = 0;
     int _lastWrittenHw = 0;

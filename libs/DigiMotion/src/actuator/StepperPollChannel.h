@@ -90,16 +90,27 @@ public:
     }
     bool isAttached() const override { return _attached; }
 
+    // Phase 3-A: user-facing semantics. setTarget(N), getCurrent eventually
+    // converges to N regardless of _reverse. Internally moveTo receives
+    // (_reverse ? -_target : _target) + _trim. hasReachedTarget compares
+    // internal distanceToGo so it remains correct under both modes.
     void setTarget(long target) override {
         _target = target;
 #ifdef ARDUINO_ARCH_ESP32
-        if (_attached) _stepper.moveTo(_target + _trim);
+        if (_attached) {
+            long effective = _reverse ? -_target : _target;
+            _stepper.moveTo(effective + _trim);
+        }
 #endif
     }
     long getTarget() const override { return _target; }
     long getCurrent() const override {
 #ifdef ARDUINO_ARCH_ESP32
-        return _attached ? _stepper.currentPosition() : _current;
+        if (_attached) {
+            long internal = _stepper.currentPosition();
+            return _reverse ? -internal : internal;
+        }
+        return _current;
 #else
         return _current;
 #endif
@@ -121,11 +132,21 @@ public:
 #endif
     }
     void setTrim(int offsetSteps) override { _trim = offsetSteps; }
+    void setReverse(bool reverse) override {
+        _reverse = reverse;
+#ifdef ARDUINO_ARCH_ESP32
+        if (_attached) {
+            long effective = _reverse ? -_target : _target;
+            _stepper.moveTo(effective + _trim);
+        }
+#endif
+    }
 
     int getPulseMin() const override { return 0; }
     int getPulseMax() const override { return 0; }
     int getMaxRate() const override { return _maxRate; }
     int getTrim() const override { return _trim; }
+    bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     bool isActive() const override {
@@ -137,14 +158,19 @@ public:
         if (!_attached) return;
 #ifdef ARDUINO_ARCH_ESP32
         _stepper.run();
-        _current = _stepper.currentPosition();
+        long internalPos = _stepper.currentPosition();
+        _current = _reverse ? -internalPos : internalPos;
 #else
         // Host (no HW): when there is work pending, jump current to target so
         // the rest of the pump scheduling logic (isActive returns false after)
-        // is exercised correctly by tests. Trim is reflected in _lastWrittenHw.
+        // is exercised correctly by tests. _current is user-facing, so it
+        // matches _target directly regardless of _reverse.
         _current = _target;
 #endif
-        _lastWrittenHw = (int)(_target + _trim);
+        // _lastWrittenHw captures the value sent to moveTo (internal coord)
+        // so tests can verify the direction sign was actually flipped on HW.
+        long internalWritten = (_reverse ? -_target : _target) + _trim;
+        _lastWrittenHw = (int)internalWritten;
     }
 
 protected:
@@ -152,6 +178,7 @@ protected:
     int _p1, _p2, _p3, _p4;
     int _maxRate = 0;
     int _trim = 0;
+    bool _reverse = false;
     long _target = 0;
     long _current = 0;
     int _lastWrittenHw = 0;

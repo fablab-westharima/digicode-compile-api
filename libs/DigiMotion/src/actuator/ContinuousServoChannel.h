@@ -80,11 +80,16 @@ public:
         // (target=0) motor needs a fresh PWM to land on the new center.
         if (_attached) _writeHw(_current);
     }
+    void setReverse(bool reverse) override {
+        _reverse = reverse;
+        if (_attached) _writeHw(_current);
+    }
 
     int getPulseMin() const override { return _pulseMin; }
     int getPulseMax() const override { return _pulseMax; }
     int getMaxRate() const override { return _maxRate; }
     int getTrim() const override { return _trim; }
+    bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     bool isActive() const override { return _attached && _current != _target; }
@@ -110,7 +115,9 @@ protected:
     //   velocity =    0 → angle = STOP_DEG + trim
     //   velocity = +100 → angle = DEG_MAX  (forward, ignoring trim for full)
     //   velocity = -100 → angle = DEG_MIN  (reverse, ignoring trim for full)
+    // Phase 3-A: reverse=true → velocity sign flip BEFORE PWM mapping.
     virtual void _writeHw(int velocityPercent) {
+        if (_reverse) velocityPercent = -velocityPercent;
         int center = STOP_DEG + _trim;
         int span = (velocityPercent >= 0) ? (DEG_MAX - center) : (center - DEG_MIN);
         int angle = center + (velocityPercent * span) / VELOCITY_MAX;
@@ -127,6 +134,7 @@ protected:
     int _pulseMax = DEFAULT_PULSE_MAX_US;
     int _maxRate = 0;
     int _trim = 0;
+    bool _reverse = false;
     int _target = 0;        // 0 % = stop
     int _current = 0;
     int _lastWrittenHw = -1;

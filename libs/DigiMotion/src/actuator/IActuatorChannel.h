@@ -33,6 +33,20 @@
 //   StepperHwChannel       : target=steps, maxRate=step/sec, trim=step offset
 //   DcMotorChannel         : target=%, maxRate=%/sec (accel), trim=% (deadband)
 //
+// Reverse semantic per concrete channel (Phase 3-A, Session 156): compensates
+// for physical mounting in opposite orientation. Compile-time only (no runtime
+// transport). R1 invariant = reverse=false default keeps _writeHw byte-
+// identical to pre-reverse code.
+//   ServoChannel180 / 270  : reverse=true → valueDeg = ANGLE_MAX - valueDeg
+//                            (mirror angle around mid-point, then add trim)
+//   ContinuousServoChannel : reverse=true → velocity sign flip
+//   StepperPollChannel/Hw  : reverse=true → target sign flip on moveTo;
+//                            getCurrent / _lastWrittenHw mirror back so
+//                            user-facing semantics (setTarget(N) / getCurrent
+//                            converges to N) stay invariant
+//   DcMotorChannel         : reverse=true → velocity sign flip
+//                            (= forward/reverse H-bridge pin swap effect)
+//
 // pulse range only meaningful for servo families; stepper / DC motor channels
 // accept the call but ignore it (documented per-channel).
 class IActuatorChannel : public IPumpable {
@@ -54,11 +68,13 @@ public:
     virtual void setPulseRange(int minUs, int maxUs) = 0;
     virtual void setMaxRate(int unitsPerSec) = 0;  // 0 = unlimited
     virtual void setTrim(int offset) = 0;
+    virtual void setReverse(bool reverse) = 0;     // Phase 3-A Session 156
 
     virtual int getPulseMin() const = 0;
     virtual int getPulseMax() const = 0;
     virtual int getMaxRate() const = 0;
     virtual int getTrim() const = 0;
+    virtual bool getReverse() const = 0;           // Phase 3-A Session 156
 
     // === pump() inherited from IPumpable ===
     // Implementations check attach state + rate cap, advance _current toward

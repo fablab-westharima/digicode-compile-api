@@ -41,10 +41,12 @@ public:
     void setPulseRange(int, int) override {}
     void setMaxRate(int) override {}
     void setTrim(int) override {}
+    void setReverse(bool) override {}
     int getPulseMin() const override { return 0; }
     int getPulseMax() const override { return 0; }
     int getMaxRate() const override  { return 0; }
     int getTrim() const override     { return 0; }
+    bool getReverse() const override { return false; }
     int getLastWrittenHw() const override { return 0; }
 
     void pump(unsigned long) override {}
