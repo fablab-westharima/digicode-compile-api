@@ -167,6 +167,27 @@ TEST(DigiRover, SetChannelTrimForwardsToIndexedChannel) {
     EXPECT_EQ(right.lastSetTarget,  0);
 }
 
+// Phase 3-B Session 156: per-channel reverse forward on both servo + dc
+// motor modes (compile-time wheel mounting orientation correction). Each
+// mode uses different concrete IActuatorChannel — IF dispatch verified.
+TEST(DigiRover, SetChannelReverseForwardsToIndexedChannel) {
+    DigiRover r;
+    MockChannel left, right;
+    r.initServoMode(&left, &right);
+
+    r.setChannelReverse(DigiRover::LEFT_SERVO,  true);
+    r.setChannelReverse(DigiRover::RIGHT_SERVO, false);
+    EXPECT_TRUE(left.lastReverse);
+    EXPECT_FALSE(right.lastReverse);
+    EXPECT_EQ(left.setReverseCalls,  1);
+    EXPECT_EQ(right.setReverseCalls, 1);
+
+    // Out-of-range: silent no-op (mirrors setChannelTrim contract).
+    r.setChannelReverse(-1, true);
+    r.setChannelReverse(DigiRover::MAX_CHANNELS, true);
+    EXPECT_EQ(left.setReverseCalls, 1);  // unchanged
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

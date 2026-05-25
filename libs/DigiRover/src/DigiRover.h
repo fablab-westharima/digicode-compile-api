@@ -145,6 +145,14 @@ public:
         IActuatorChannel* ch = channelAt(idx);
         if (ch != nullptr) ch->setTrim(trimDeg);
     }
+    // Phase 3-A/B Session 156: per-channel reverse forward. Works for both
+    // servo mode (ContinuousServoChannel) and dc motor mode (DcMotorChannel)
+    // — both concrete IActuatorChannel override setReverse. Out-of-range idx
+    // silently no-ops, mirroring setChannelTrim semantics.
+    void setChannelReverse(int idx, bool reverse) {
+        IActuatorChannel* ch = channelAt(idx);
+        if (ch != nullptr) ch->setReverse(reverse);
+    }
 
     // === velocity commands ===
     // speedPercent in [0, 100]. Negative clamps to 0. >100 clamps to 100.

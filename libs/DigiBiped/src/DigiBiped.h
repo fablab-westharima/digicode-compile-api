@@ -168,6 +168,12 @@ public:
         IActuatorChannel* ch = channelAt(idx);
         if (ch != nullptr) ch->setTrim(trimDeg);
     }
+    // Phase 3-A/B Session 156: per-channel reverse forward. Out-of-range
+    // idx silently no-ops, mirroring setChannelTrim semantics.
+    void setChannelReverse(int idx, bool reverse) {
+        IActuatorChannel* ch = channelAt(idx);
+        if (ch != nullptr) ch->setReverse(reverse);
+    }
 
     // === motion: Async setup ===
     // All channels return to HOME_DEG (90°). One-shot; isIdle returns

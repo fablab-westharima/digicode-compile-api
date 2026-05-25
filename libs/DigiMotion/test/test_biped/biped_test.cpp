@@ -201,6 +201,31 @@ TEST(DigiBiped, SetChannelTrimForwardsByIndex) {
     EXPECT_EQ(ll.setTrimCalls, 1);  // unchanged
 }
 
+// Phase 3-B Session 156: per-channel reverse forward (case 22 founding use
+// case = Humanoid 物理取付方向補正 compile-time path)
+TEST(DigiBiped, SetChannelReverseForwardsByIndex) {
+    DigiBiped biped;
+    MockChannel ll, rl, lf, rf;
+    biped.attachChannels(&ll, &rl, &lf, &rf);
+
+    biped.setChannelReverse(DigiBiped::LEFT_LEG,   true);
+    biped.setChannelReverse(DigiBiped::RIGHT_LEG,  false);
+    biped.setChannelReverse(DigiBiped::LEFT_FOOT,  true);
+    biped.setChannelReverse(DigiBiped::RIGHT_FOOT, true);
+
+    EXPECT_TRUE(ll.lastReverse);
+    EXPECT_FALSE(rl.lastReverse);
+    EXPECT_TRUE(lf.lastReverse);
+    EXPECT_TRUE(rf.lastReverse);
+    EXPECT_EQ(ll.setReverseCalls, 1);
+    EXPECT_EQ(rl.setReverseCalls, 1);
+
+    // Out-of-range: silent no-op (mirrors setChannelTrim contract).
+    biped.setChannelReverse(-1, true);
+    biped.setChannelReverse(DigiBiped::CHANNEL_COUNT, true);
+    EXPECT_EQ(ll.setReverseCalls, 1);  // unchanged
+}
+
 TEST(DigiBiped, SetChannelMaxRateAndPulseRangeForwardByIndex) {
     DigiBiped biped;
     MockChannel ll, rl, lf, rf;

@@ -140,6 +140,13 @@ public:
         IActuatorChannel* ch = channelAt(idx);
         if (ch != nullptr) ch->setTrim(trimDeg);
     }
+    // Phase 3-A/B Session 156: per-channel reverse forward (transform robot
+    // mounting orientation correction compile-time path). Out-of-range idx
+    // silently no-ops, mirroring setChannelTrim semantics.
+    void setChannelReverse(int idx, bool reverse) {
+        IActuatorChannel* ch = channelAt(idx);
+        if (ch != nullptr) ch->setReverse(reverse);
+    }
 
     // === mode state (no motion; state flag only) ===
     void setMode(MorphMode mode) { _mode = mode; }

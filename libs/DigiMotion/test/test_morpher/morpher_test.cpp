@@ -145,6 +145,26 @@ TEST(DigiMorpher, SetChannelTrimForwardsByIndex) {
     EXPECT_EQ(rf.lastSetTrim, -5);
 }
 
+// Phase 3-B Session 156: per-channel reverse forward (transform robot
+// mounting orientation correction compile-time path)
+TEST(DigiMorpher, SetChannelReverseForwardsByIndex) {
+    DigiMorpher m;
+    MockChannel lh, rh, lf, rf;
+    m.attachChannels(&lh, &rh, &lf, &rf);
+
+    m.setChannelReverse(DigiMorpher::LEFT_HIP,    true);
+    m.setChannelReverse(DigiMorpher::RIGHT_FOOT,  true);
+
+    EXPECT_TRUE(lh.lastReverse);
+    EXPECT_TRUE(rf.lastReverse);
+    EXPECT_EQ(lh.setReverseCalls, 1);
+    EXPECT_EQ(rf.setReverseCalls, 1);
+
+    // Out-of-range: silent no-op.
+    m.setChannelReverse(-1, true);
+    EXPECT_EQ(lh.setReverseCalls, 1);  // unchanged
+}
+
 // Mode guard: walk-mode motion in roll mode is rejected (returns false,
 // no state transition, no channel publish).
 TEST(DigiMorpher, WalkAsyncRejectedInRollMode) {
