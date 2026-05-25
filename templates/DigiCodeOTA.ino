@@ -62,14 +62,6 @@ String serialBuffer = "";
 WebServer server(80);
 
 // ============================================
-// サーボトリム機能（v1.6.0追加）
-// ============================================
-#define MAX_SERVO_TRIM 16
-int servoTrims[MAX_SERVO_TRIM] = {0};
-int servoTrimCount = 0;
-Preferences trimPrefs;
-
-// ============================================
 // PID gain runtime override (Phase D-3、Session 148、case 23 incident F transport-side 解消)
 // ============================================
 #define MAX_PID_INSTANCES 4
@@ -99,7 +91,6 @@ void setup() {
   // Preferencesから設定を読み込み
   loadDeviceConfig();
   loadWiFiList();
-  loadServoTrims();  // v1.6.0: サーボトリム値を読み込み
 
   // WiFi接続試行（Stationモード）
   // mDNSホスト名: device_nameが設定されていればそれを使用、なければuuidをフォールバック
@@ -233,12 +224,6 @@ void setup() {
 
   // ユーザー初期化コード
   userSetup();
-
-  // Phase D-3 (Session 148、 case 23 incident B 解消):
-  // userSetup() で servo.attach 完了後、 NVS から load 済 trim 値を physical 反映。
-  // 純粋な servo.write user code に対しては明示 getServoTrim(i) call が必要だが、
-  // DigiMotion::ServoChannel180 経由 user code の場合は _writeHw() で自動 apply される。
-  applyTrimsToActuators();
 }
 
 void loop() {
@@ -466,82 +451,6 @@ void clearAllWiFi() {
   preferences.putInt("wifi_count", 0);
   preferences.end();
   Serial.println("All WiFi credentials cleared!");
-}
-
-// ============================================
-// サーボトリム機能（v1.6.0追加）
-// ============================================
-
-// トリム値をNVSから読み込み
-void loadServoTrims() {
-  trimPrefs.begin("servo_trim", true);  // Read-only
-  servoTrimCount = trimPrefs.getInt("count", 0);
-  if (servoTrimCount > MAX_SERVO_TRIM) servoTrimCount = MAX_SERVO_TRIM;
-
-  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
-    String key = "s" + String(i);
-    servoTrims[i] = trimPrefs.getInt(key.c_str(), 0);
-  }
-  trimPrefs.end();
-
-  Serial.printf("[TRIM] Loaded %d servo trims: ", servoTrimCount);
-  for (int i = 0; i < servoTrimCount; i++) {
-    Serial.printf("%d ", servoTrims[i]);
-  }
-  Serial.println();
-}
-
-// トリム値をNVSに保存
-void saveServoTrims() {
-  trimPrefs.begin("servo_trim", false);  // Read-Write
-  trimPrefs.putInt("count", servoTrimCount);
-
-  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
-    String key = "s" + String(i);
-    trimPrefs.putInt(key.c_str(), servoTrims[i]);
-  }
-  trimPrefs.end();
-
-  Serial.println("[TRIM] Saved to NVS");
-}
-
-// トリム値を設定（範囲: -30〜+30）
-void setServoTrim(int index, int value) {
-  if (index >= 0 && index < MAX_SERVO_TRIM) {
-    servoTrims[index] = constrain(value, -30, 30);
-    Serial.printf("[TRIM] Set servo %d trim to %d\n", index, servoTrims[index]);
-  }
-}
-
-// トリム値を取得
-int getServoTrim(int index) {
-  if (index >= 0 && index < MAX_SERVO_TRIM) {
-    return servoTrims[index];
-  }
-  return 0;
-}
-
-// サーボ数を設定
-void setServoTrimCount(int count) {
-  servoTrimCount = constrain(count, 0, MAX_SERVO_TRIM);
-  Serial.printf("[TRIM] Servo count set to %d\n", servoTrimCount);
-}
-
-// ============================================
-// applyTrimsToActuators (Phase D-3、Session 148、case 23 incident B 解消 commit)
-// ============================================
-// servoTrims[] 配列の consumer = 起動時 + /trim/save 後に呼出、
-// 旧 /trim/test endpoint コメント「user code 任せ、 ファームウェアレベルではログ出力のみ」 状態を解消。
-// OTA template は user code 側で servo declare するため、 ここでは servoTrims[] を Serial に出力して
-// (a) consumer ≥ 1 件確立、 (b) user code (または将来 DigiMotion::ServoChannel180::_writeHw) が
-// getServoTrim(i) で読み出して physical servo 反映、 という 2 段 path を確立する。
-// 純粋な servo.write を直接呼ぶ user code は user が明示的に getServoTrim(i) を呼ぶ必要あり。
-void applyTrimsToActuators() {
-  Serial.print("[TRIM] applyTrimsToActuators (ch=trim): ");
-  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
-    Serial.printf("%d=%+d ", i, servoTrims[i]);
-  }
-  Serial.println();
 }
 
 // ============================================
@@ -1397,162 +1306,6 @@ void setupWebServer() {
       } else {
         Update.printError(Serial);
       }
-    }
-  });
-
-  // ============================================
-  // サーボトリムAPIエンドポイント（v1.6.0追加）
-  // ============================================
-
-  // CORS Preflight: /trim
-  server.on("/trim", HTTP_OPTIONS, [](){
-    sendCORSHeaders();
-    server.send(204);
-  });
-
-  // GET /trim - トリム値取得
-  server.on("/trim", HTTP_GET, [](){
-    sendCORSHeaders();
-
-    String json = "{\"count\":" + String(servoTrimCount) + ",\"trims\":[";
-    for (int i = 0; i < servoTrimCount; i++) {
-      if (i > 0) json += ",";
-      json += String(servoTrims[i]);
-    }
-    json += "]}";
-
-    server.send(200, "application/json", json);
-  });
-
-  // POST /trim - トリム値設定（一時的）
-  // Body: {"index":0,"value":5} または {"trims":[0,5,-3,0]}
-  server.on("/trim", HTTP_POST, [](){
-    sendCORSHeaders();
-
-    if (!server.hasArg("plain")) {
-      server.send(400, "application/json", "{\"error\":\"No body\"}");
-      return;
-    }
-
-    String body = server.arg("plain");
-    Serial.println("[TRIM] POST /trim: " + body);
-
-    // 配列形式: {"trims":[0,5,-3,0]}
-    int trimsArr[MAX_SERVO_TRIM];
-    int arrCount = parseJsonArray(body, "trims", trimsArr, MAX_SERVO_TRIM);
-
-    if (arrCount > 0) {
-      servoTrimCount = arrCount;
-      for (int i = 0; i < arrCount; i++) {
-        servoTrims[i] = constrain(trimsArr[i], -30, 30);
-      }
-      applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): batch trim 後の real-time apply
-      Serial.printf("[TRIM] Set %d trims\n", arrCount);
-      server.send(200, "application/json", "{\"success\":true}");
-      return;
-    }
-
-    // 単一形式: {"index":0,"value":5}
-    int index = parseJsonInt(body, "index");
-    int value = parseJsonInt(body, "value");
-
-    if (index != -9999 && value != -9999) {
-      setServoTrim(index, value);
-      // サーボ数を自動更新
-      if (index >= servoTrimCount) {
-        servoTrimCount = index + 1;
-      }
-      applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): single trim 後の real-time apply
-      server.send(200, "application/json", "{\"success\":true}");
-    } else {
-      server.send(400, "application/json", "{\"error\":\"Invalid JSON format\"}");
-    }
-  });
-
-  // CORS Preflight: /trim/save
-  server.on("/trim/save", HTTP_OPTIONS, [](){
-    sendCORSHeaders();
-    server.send(204);
-  });
-
-  // POST /trim/save - NVSに永続保存 + 物理サーボへ反映 (Phase D-3、case 23 incident B 解消)
-  server.on("/trim/save", HTTP_POST, [](){
-    sendCORSHeaders();
-    saveServoTrims();
-    applyTrimsToActuators();  // case 23 incident B: NVS write 直後に consumer 起動
-    server.send(200, "application/json", "{\"success\":true}");
-  });
-
-  // CORS Preflight: /trim/test
-  server.on("/trim/test", HTTP_OPTIONS, [](){
-    sendCORSHeaders();
-    server.send(204);
-  });
-
-  // POST /trim/test - テスト動作
-  // Body: {"action":"home"} or {"action":"sweep","index":0}
-  // 注: 実際のサーボ制御はユーザーコード側で実装
-  //     ここではフラグを立てて、ユーザーコードから読み取る
-  server.on("/trim/test", HTTP_POST, [](){
-    sendCORSHeaders();
-
-    if (!server.hasArg("plain")) {
-      server.send(400, "application/json", "{\"error\":\"No body\"}");
-      return;
-    }
-
-    String body = server.arg("plain");
-    Serial.println("[TRIM] POST /trim/test: " + body);
-
-    // action の検出（簡易実装）
-    String action = "unknown";
-    if (body.indexOf("\"home\"") >= 0) {
-      action = "home";
-    } else if (body.indexOf("\"sweep\"") >= 0) {
-      action = "sweep";
-    } else if (body.indexOf("\"walk\"") >= 0) {
-      action = "walk";
-    }
-
-    int index = parseJsonInt(body, "index");
-
-    Serial.printf("[TRIM] Test action: %s, index: %d\n", action.c_str(), index);
-
-    // テスト動作の実際の実装は、サーボが接続されている
-    // ユーザーコード側で行う必要がある
-    // ファームウェアレベルではログ出力のみ
-    server.send(200, "application/json", "{\"success\":true,\"action\":\"" + action + "\"}");
-  });
-
-  // CORS Preflight: /trim/config
-  server.on("/trim/config", HTTP_OPTIONS, [](){
-    sendCORSHeaders();
-    server.send(204);
-  });
-
-  // POST /trim/config - サーボ構成設定
-  // Body: {"count":4}
-  server.on("/trim/config", HTTP_POST, [](){
-    sendCORSHeaders();
-
-    if (!server.hasArg("plain")) {
-      server.send(400, "application/json", "{\"error\":\"No body\"}");
-      return;
-    }
-
-    String body = server.arg("plain");
-    Serial.println("[TRIM] POST /trim/config: " + body);
-
-    int count = parseJsonInt(body, "count");
-    if (count != -9999 && count >= 0 && count <= MAX_SERVO_TRIM) {
-      setServoTrimCount(count);
-      // 新しいサーボのトリム値を0に初期化
-      for (int i = servoTrimCount; i < count; i++) {
-        servoTrims[i] = 0;
-      }
-      server.send(200, "application/json", "{\"success\":true,\"count\":" + String(servoTrimCount) + "}");
-    } else {
-      server.send(400, "application/json", "{\"error\":\"Invalid count\"}");
     }
   });
 

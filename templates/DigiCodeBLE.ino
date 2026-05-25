@@ -49,16 +49,12 @@ int servoPins[USER_MAX_SERVOS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 int servoCount = 0;
 
 // ============================================
-// サーボトリム + PID gain runtime (Phase D-3、Session 148、case 23 incident B + F transport-side 解消)
+// PID gain runtime (Phase D-3、Session 148、case 23 incident F transport-side 解消)
 // ============================================
-// NVS namespace "servo_trim" (OTA / USB template と整合、 cross-transport で同 storage area 共有)。
-// BLE template でも Preferences 利用可 (Preferences は NimBLE init 後の使用なら mutex 競合なし、
-//  init 前の device_name/uuid のみ NVS 直接 API を使用する設計、 trim は init 後 = Preferences OK)。
-#define MAX_SERVO_TRIM 8
-int servoTrims[MAX_SERVO_TRIM] = {0};
-int servoTrimCount = 0;
-Preferences trimPrefs;
-
+// PID gain は SET_PID:name,kp,ki,kd command で BLE GATT NUS 経由 runtime 上書き、 user code が getPidGain で読出。
+// (Phase 3-F Session 156: トリム経路 A 廃止 = ServoTrimDialog pinPresetStore 直書き compile-time
+//  反映に統一、 SET_TRIM/SET_TRIMS/GET_TRIMS/SAVE_TRIMS/TEST_TRIM commands + servoTrims[] +
+//  applyTrimsToActuators + Preferences "servo_trim" namespace 全削除。)
 #define MAX_PID_INSTANCES 4
 struct PidGainEntry { String name; float kp; float ki; float kd; };
 PidGainEntry pidGains[MAX_PID_INSTANCES];
@@ -121,18 +117,10 @@ void setup() {
   Serial.println(advStarted ? "SUCCESS" : "FAILED");
   Serial.println("BLE OTA Ready.");
 
-  // Phase D-3 (Session 148、 case 23 incident B 解消):
-  // NimBLE init 後に Preferences 経由で NVS からトリム値を読込
-  loadServoTrims();
-
   Serial.println("Ready.");
 
   // ユーザー定義のsetup処理を呼び出し
   userSetup();
-
-  // Phase D-3 (Session 148、 case 23 incident B 解消):
-  // userSetup() で servo.attach 完了後、 NVS load 済 trim 値を attached servo に物理反映。
-  applyTrimsToActuators();
 }
 
 void loop() {
@@ -143,61 +131,6 @@ void loop() {
   userLoop();
 
   delay(10);
-}
-
-// ============================================
-// サーボトリム機能 (Phase D-3、Session 148、case 23 incident B 解消)
-// NVS namespace "servo_trim" (OTA / USB template と整合)、 key schema = "count" + "s0"..."s7"
-// BLE template は NimBLE init 後の Preferences 利用なので mutex 競合なし
-// ============================================
-
-void loadServoTrims() {
-  trimPrefs.begin("servo_trim", true);
-  servoTrimCount = trimPrefs.getInt("count", 0);
-  if (servoTrimCount > MAX_SERVO_TRIM) servoTrimCount = MAX_SERVO_TRIM;
-  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
-    String key = "s" + String(i);
-    servoTrims[i] = trimPrefs.getInt(key.c_str(), 0);
-  }
-  trimPrefs.end();
-  Serial.printf("[TRIM] Loaded %d servo trims\n", servoTrimCount);
-}
-
-void saveServoTrims() {
-  trimPrefs.begin("servo_trim", false);
-  trimPrefs.putInt("count", servoTrimCount);
-  for (int i = 0; i < servoTrimCount && i < MAX_SERVO_TRIM; i++) {
-    String key = "s" + String(i);
-    trimPrefs.putInt(key.c_str(), servoTrims[i]);
-  }
-  trimPrefs.end();
-  Serial.println("[TRIM] Saved to NVS");
-}
-
-void setServoTrim(int index, int value) {
-  if (index >= 0 && index < MAX_SERVO_TRIM) {
-    servoTrims[index] = constrain(value, -30, 30);
-    if (index >= servoTrimCount) servoTrimCount = index + 1;
-    Serial.printf("[TRIM] Set servo %d trim to %d\n", index, servoTrims[index]);
-  }
-}
-
-int getServoTrim(int index) {
-  if (index >= 0 && index < MAX_SERVO_TRIM) {
-    return servoTrims[index];
-  }
-  return 0;
-}
-
-void applyTrimsToActuators() {
-  int applied = 0;
-  for (int i = 0; i < servoCount && i < USER_MAX_SERVOS && i < MAX_SERVO_TRIM; i++) {
-    if (servoPins[i] >= 0 && servos[i].attached()) {
-      servos[i].write(constrain(90 + servoTrims[i], 0, 180));
-      applied++;
-    }
-  }
-  Serial.printf("[TRIM] applyTrimsToActuators: %d attached servos\n", applied);
 }
 
 // ============================================
@@ -392,62 +325,11 @@ void processCommand(String command) {
     ESP.restart();
 
   // ============================================
-  // Phase D-3 (Session 148、 case 23 incident B + F transport-side 解消):
-  // SET_TRIM / SET_TRIMS / GET_TRIMS / SAVE_TRIMS / TEST_TRIM / SET_PID line commands
-  // (BleTrimTransport / BlePidTransport から BLE GATT NUS 経由送信、 USB template と同 spec)
+  // Phase D-3 (Session 148、 case 23 incident F transport-side 解消):
+  // SET_PID line command (BlePidTransport から BLE GATT NUS 経由送信、 USB template と同 spec)
+  // (Phase 3-F Session 156: SET_TRIM / SET_TRIMS / GET_TRIMS / SAVE_TRIMS / TEST_TRIM 全削除、
+  //  経路 A 廃止 = ServoTrimDialog pinPresetStore 直書き compile-time 反映に統一。)
   // ============================================
-  } else if (command.startsWith("SET_TRIM:")) {
-    String params = command.substring(9);
-    int commaIdx = params.indexOf(',');
-    if (commaIdx > 0) {
-      int index = params.substring(0, commaIdx).toInt();
-      int value = params.substring(commaIdx + 1).toInt();
-      setServoTrim(index, value);
-      applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): real-time apply、 SAVE_TRIMS 待ちでなく slider 操作即時反映
-      Serial.println("OK:TRIM_SET");
-    } else {
-      Serial.println("ERROR:INVALID_TRIM");
-    }
-
-  } else if (command.startsWith("SET_TRIMS:")) {
-    String values = command.substring(10);
-    int idx = 0;
-    int startPos = 0;
-    while (idx < MAX_SERVO_TRIM) {
-      int nextComma = values.indexOf(',', startPos);
-      String vStr = (nextComma < 0) ? values.substring(startPos) : values.substring(startPos, nextComma);
-      vStr.trim();
-      if (vStr.length() == 0) break;
-      servoTrims[idx++] = constrain(vStr.toInt(), -30, 30);
-      if (nextComma < 0) break;
-      startPos = nextComma + 1;
-    }
-    servoTrimCount = idx;
-    applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): batch trim 後の real-time apply
-    Serial.printf("OK:TRIMS_SET:%d\n", servoTrimCount);
-
-  } else if (command == "GET_TRIMS") {
-    Serial.print("OK:TRIMS=");
-    for (int i = 0; i < servoTrimCount; i++) {
-      if (i > 0) Serial.print(",");
-      Serial.print(servoTrims[i]);
-    }
-    Serial.println();
-
-  } else if (command == "SAVE_TRIMS") {
-    saveServoTrims();
-    applyTrimsToActuators();
-    Serial.println("OK:TRIMS_SAVED");
-
-  } else if (command.startsWith("TEST_TRIM:")) {
-    String params = command.substring(10);
-    int commaIdx = params.indexOf(',');
-    String action = (commaIdx < 0) ? params : params.substring(0, commaIdx);
-    action.trim();
-    int index = (commaIdx > 0) ? params.substring(commaIdx + 1).toInt() : -1;
-    Serial.printf("[TRIM] Test action: %s, index: %d\n", action.c_str(), index);
-    Serial.println("OK:TEST_OK");
-
   } else if (command.startsWith("SET_PID:")) {
     String params = command.substring(8);
     int c1 = params.indexOf(',');
