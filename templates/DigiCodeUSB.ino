@@ -278,6 +278,7 @@ void processCommand(String command) {
       int index = params.substring(0, commaIdx).toInt();
       int value = params.substring(commaIdx + 1).toInt();
       setServoTrim(index, value);
+      applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): real-time apply、 SAVE_TRIMS 待ちでなく slider 操作即時反映
       Serial.println("OK:TRIM_SET");
     } else {
       Serial.println("ERROR:INVALID_TRIM");
@@ -298,6 +299,7 @@ void processCommand(String command) {
       startPos = nextComma + 1;
     }
     servoTrimCount = idx;
+    applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): batch trim 後の real-time apply
     Serial.printf("OK:TRIMS_SET:%d\n", servoTrimCount);
 
   } else if (command == "GET_TRIMS") {

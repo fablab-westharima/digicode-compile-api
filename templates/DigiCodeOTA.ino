@@ -1446,6 +1446,7 @@ void setupWebServer() {
       for (int i = 0; i < arrCount; i++) {
         servoTrims[i] = constrain(trimsArr[i], -30, 30);
       }
+      applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): batch trim 後の real-time apply
       Serial.printf("[TRIM] Set %d trims\n", arrCount);
       server.send(200, "application/json", "{\"success\":true}");
       return;
@@ -1461,6 +1462,7 @@ void setupWebServer() {
       if (index >= servoTrimCount) {
         servoTrimCount = index + 1;
       }
+      applyTrimsToActuators();  // case 23 incident B 再発 fix (Session 154): single trim 後の real-time apply
       server.send(200, "application/json", "{\"success\":true}");
     } else {
       server.send(400, "application/json", "{\"error\":\"Invalid JSON format\"}");
