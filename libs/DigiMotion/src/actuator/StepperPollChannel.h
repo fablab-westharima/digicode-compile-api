@@ -42,6 +42,26 @@ public:
 #endif
     {}
 
+    // DRIVER mode with enable pin (Phase X-1.5 Q-G=ζ).
+    // Most A4988 / DRV8825 drivers have an EN pin that must be wired to
+    // assert active-low for the driver to source coil current. Passing
+    // enablePin < 0 is identical to the 2-arg ctor (no enable wiring).
+    // AccelStepper's enableOutputs() is called in attach() and will drive
+    // this pin per its setPinsInverted polarity (default polarity = LOW
+    // for enable = OFF; user wires for the driver's expected polarity).
+    StepperPollChannel(int stepPin, int dirPin, int enablePin)
+        : _mode(MODE_DRIVER), _p1(stepPin), _p2(dirPin), _p3(enablePin), _p4(-1)
+#ifdef ARDUINO_ARCH_ESP32
+        , _stepper(MODE_DRIVER, stepPin, dirPin)
+#endif
+    {
+#ifdef ARDUINO_ARCH_ESP32
+        if (enablePin >= 0) {
+            _stepper.setEnablePin((uint8_t)enablePin);
+        }
+#endif
+    }
+
     // FULL4WIRE mode: 4 coil pins (e.g. ULN2003 IN1..IN4 → user-wired order).
     StepperPollChannel(int pin1, int pin2, int pin3, int pin4)
         : _mode(MODE_FULL4WIRE), _p1(pin1), _p2(pin2), _p3(pin3), _p4(pin4)

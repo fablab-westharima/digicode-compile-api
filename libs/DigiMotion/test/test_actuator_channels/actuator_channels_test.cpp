@@ -228,6 +228,32 @@ TEST(StepperPoll, DriverModeConstructorAndAttach) {
     EXPECT_TRUE(ch.isAttached());
 }
 
+// Phase X-1.5 Q-G=ζ: 3-arg DRIVER ctor with enable pin. Disambiguates
+// from the 4-arg FULL4WIRE ctor (overload resolution) and forwards
+// enable handling to AccelStepper's setEnablePin on ESP32.
+TEST(StepperPoll, DriverModeConstructorWithEnablePin) {
+    StepperPollChannel ch(/*step*/26, /*dir*/25, /*en*/33);
+    EXPECT_FALSE(ch.isAttached());
+    EXPECT_TRUE(ch.attach());
+    EXPECT_TRUE(ch.isAttached());
+    EXPECT_EQ(ch.getTarget(), 0);
+
+    // setTarget + pump → reaches target as in the 2-arg DRIVER case;
+    // enable pin behavior is HW-side only, not observable through the
+    // host backend (which just records target+trim in _lastWrittenHw).
+    ch.setTrim(2);
+    ch.setTarget(150);
+    ch.pump(0);
+    EXPECT_EQ(ch.getLastWrittenHw(), 152);
+}
+
+// enablePin < 0 is semantically identical to the 2-arg DRIVER ctor.
+TEST(StepperPoll, DriverModeConstructorWithNegativeEnablePinNoOp) {
+    StepperPollChannel ch(26, 25, -1);
+    EXPECT_TRUE(ch.attach());
+    EXPECT_TRUE(ch.isAttached());
+}
+
 TEST(StepperPoll, FourWireConstructorAndDetach) {
     StepperPollChannel ch(/*in1*/14, /*in2*/27, /*in3*/26, /*in4*/25);
     EXPECT_TRUE(ch.attach());

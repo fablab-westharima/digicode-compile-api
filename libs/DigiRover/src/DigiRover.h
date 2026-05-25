@@ -25,9 +25,13 @@
  *   ROVER_SERVO_2PIN     : 2 continuous-rotation servos, target=±speed%
  *                          (left forward = +speed, right forward =
  *                          −speed mirrored).
- *   ROVER_DC_MOTOR_4PIN  : 4 H-bridge motor channels (LA/LB/RA/RB).
- *                          Forward on a side = A=+speed, B=0.
- *                          Backward on a side = A=0, B=+speed.
+ *   ROVER_DC_MOTOR_4PIN  : 2 DcMotorChannel motors, each owning 2 GPIO
+ *                          pins (forward + reverse) for an integrated
+ *                          H-bridge. target=±speed%, DcMotorChannel
+ *                          handles direction via sign internally.
+ *                          (Phase X-1.5 Q-D=A refactor: was 4 single-
+ *                          direction IActuatorChannel slots, now 2
+ *                          DcMotorChannel complete H-bridge motors.)
  *
  * Lifecycle: setMode-equivalent is the init*Mode() call. Re-init switches
  * mode and rebuilds the channel registry.
@@ -37,6 +41,7 @@
 #define DIGIROVER_H
 
 #include <actuator/IActuatorChannel.h>
+#include <actuator/DcMotorChannel.h>
 #include <motion/ChannelBank.h>
 #include <trim/ITrimStore.h>
 
@@ -48,14 +53,16 @@ public:
         ROVER_DC_MOTOR_4PIN  = 2
     };
 
-    // Channel index slots (sparse — only the first N are populated per mode).
+    // Channel index slots. Both modes use only the first 2 slots; the
+    // _channels[] array is sized to MAX_CHANNELS=4 for defensive bounds
+    // checking (and to match the array shape from before the Phase X-1.5
+    // Q-D=A refactor, when DC motor mode used 4 separate single-direction
+    // channels).
     enum ChannelIndex {
         LEFT_SERVO      = 0,
         RIGHT_SERVO     = 1,
-        LEFT_DC_A       = 0,
-        LEFT_DC_B       = 1,
-        RIGHT_DC_A      = 2,
-        RIGHT_DC_B      = 3,
+        LEFT_DC_MOTOR   = 0,  // aliases LEFT_SERVO (both modes share slot 0)
+        RIGHT_DC_MOTOR  = 1,  // aliases RIGHT_SERVO
         MAX_CHANNELS    = 4
     };
 
@@ -78,25 +85,22 @@ public:
         return true;
     }
 
-    bool initDcMotorMode(IActuatorChannel* la, IActuatorChannel* lb,
-                         IActuatorChannel* ra, IActuatorChannel* rb) {
-        if (la == nullptr || lb == nullptr ||
-            ra == nullptr || rb == nullptr) return false;
+    // Phase X-1.5 Q-D=A refactor: takes 2 DcMotorChannel pointers (1 per
+    // motor, each owning forward + reverse pins internally) instead of 4
+    // single-direction IActuatorChannel pointers. Direction is signaled by
+    // sign of setTarget within each DcMotorChannel's _writeHw, eliminating
+    // the previous _setHBridgeSide helper.
+    bool initDcMotorMode(DcMotorChannel* left, DcMotorChannel* right) {
+        if (left == nullptr || right == nullptr) return false;
         _resetChannels();
-        _channels[LEFT_DC_A]  = la;
-        _channels[LEFT_DC_B]  = lb;
-        _channels[RIGHT_DC_A] = ra;
-        _channels[RIGHT_DC_B] = rb;
-        _channelCount = 4;
+        _channels[LEFT_DC_MOTOR]  = left;
+        _channels[RIGHT_DC_MOTOR] = right;
+        _channelCount = 2;
         _mode = ROVER_DC_MOTOR_4PIN;
-        _bank.addChannel(la);
-        _bank.addChannel(lb);
-        _bank.addChannel(ra);
-        _bank.addChannel(rb);
-        la->attach();
-        lb->attach();
-        ra->attach();
-        rb->attach();
+        _bank.addChannel(left);
+        _bank.addChannel(right);
+        left->attach();
+        right->attach();
         return true;
     }
 
@@ -109,16 +113,15 @@ public:
         store.applyToChannel(_channels[RIGHT_SERVO], pinRight);
         return true;
     }
+    // Phase X-1.5 Q-D=A refactor: trim is per-motor (deadband %), keyed
+    // by the motor's forward pin (the conventional "primary" pin
+    // identifier).
     bool initDcMotorModeWithTrim(ITrimStore& store,
-                                 IActuatorChannel* la, IActuatorChannel* lb,
-                                 IActuatorChannel* ra, IActuatorChannel* rb,
-                                 int pinLA, int pinLB,
-                                 int pinRA, int pinRB) {
-        if (!initDcMotorMode(la, lb, ra, rb)) return false;
-        store.applyToChannel(_channels[LEFT_DC_A],  pinLA);
-        store.applyToChannel(_channels[LEFT_DC_B],  pinLB);
-        store.applyToChannel(_channels[RIGHT_DC_A], pinRA);
-        store.applyToChannel(_channels[RIGHT_DC_B], pinRB);
+                                 DcMotorChannel* left, DcMotorChannel* right,
+                                 int pinLeftForward, int pinRightForward) {
+        if (!initDcMotorMode(left, right)) return false;
+        store.applyToChannel(_channels[LEFT_DC_MOTOR],  pinLeftForward);
+        store.applyToChannel(_channels[RIGHT_DC_MOTOR], pinRightForward);
         return true;
     }
 
@@ -189,24 +192,15 @@ private:
             if (_channels[RIGHT_SERVO] != nullptr)
                 _channels[RIGHT_SERVO]->setTarget(-rightSigned);
         } else if (_mode == ROVER_DC_MOTOR_4PIN) {
-            // H-bridge: A pin carries forward magnitude, B pin carries
-            // backward magnitude. Only one is active per side at a time.
-            _setHBridgeSide(_channels[LEFT_DC_A], _channels[LEFT_DC_B],   leftSigned);
-            _setHBridgeSide(_channels[RIGHT_DC_A], _channels[RIGHT_DC_B], rightSigned);
+            // DcMotorChannel handles direction via sign of target
+            // internally (Phase X-1.5 Q-D=A refactor: was per-pin
+            // _setHBridgeSide split, now 1 channel = 1 complete motor).
+            if (_channels[LEFT_DC_MOTOR] != nullptr)
+                _channels[LEFT_DC_MOTOR]->setTarget(leftSigned);
+            if (_channels[RIGHT_DC_MOTOR] != nullptr)
+                _channels[RIGHT_DC_MOTOR]->setTarget(rightSigned);
         }
         _isMoving = (leftSigned != 0) || (rightSigned != 0);
-    }
-
-    static void _setHBridgeSide(IActuatorChannel* a, IActuatorChannel* b,
-                                int signedSpeed) {
-        if (a == nullptr || b == nullptr) return;
-        if (signedSpeed >= 0) {
-            a->setTarget(signedSpeed);
-            b->setTarget(0);
-        } else {
-            a->setTarget(0);
-            b->setTarget(-signedSpeed);
-        }
     }
 };
 

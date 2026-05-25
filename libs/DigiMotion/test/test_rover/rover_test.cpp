@@ -1,14 +1,18 @@
-// DigiRover host-side unit tests (Phase A-ε commit 2).
+// DigiRover host-side unit tests (Phase A-ε commit 2;
+//   Phase X-1.5 Q-D=A refactor: DC motor mode now uses 2 DcMotorChannel
+//   instances instead of 4 single-direction IActuatorChannel slots).
 //
 // Verifies the Layer 5 dual-mode rover API: mutually-exclusive
 // init*Mode selection, per-mode velocity command mapping (continuous-
-// rotation servo vs H-bridge DC motor), trim forwarding.
+// rotation servo with right-side mirror vs sign-encoded DC motor),
+// trim forwarding.
 //
 // 6 cases. Native env, no HW.
 
 #include <gtest/gtest.h>
 
 #include "DigiRover.h"
+#include "actuator/DcMotorChannel.h"
 
 namespace {
 
@@ -66,16 +70,22 @@ TEST(DigiRover, InitServoModeAttachesTwoChannels) {
     EXPECT_EQ(r2.mode(), DigiRover::ROVER_UNSET);
 }
 
-TEST(DigiRover, InitDcMotorModeAttachesFourChannels) {
+TEST(DigiRover, InitDcMotorModeAttachesTwoMotors) {
     DigiRover r;
-    MockChannel la, lb, ra, rb;
-    EXPECT_TRUE(r.initDcMotorMode(&la, &lb, &ra, &rb));
+    DcMotorChannel leftMotor(/*fwd*/16, /*rev*/17);
+    DcMotorChannel rightMotor(/*fwd*/18, /*rev*/19);
+    EXPECT_TRUE(r.initDcMotorMode(&leftMotor, &rightMotor));
     EXPECT_EQ(r.mode(), DigiRover::ROVER_DC_MOTOR_4PIN);
-    EXPECT_EQ(r.channelCount(), 4);
-    EXPECT_EQ(la.attachCalls, 1);
-    EXPECT_EQ(lb.attachCalls, 1);
-    EXPECT_EQ(ra.attachCalls, 1);
-    EXPECT_EQ(rb.attachCalls, 1);
+    EXPECT_EQ(r.channelCount(), 2);
+    EXPECT_TRUE(leftMotor.isAttached());
+    EXPECT_TRUE(rightMotor.isAttached());
+    EXPECT_EQ(r.channelAt(DigiRover::LEFT_DC_MOTOR),  &leftMotor);
+    EXPECT_EQ(r.channelAt(DigiRover::RIGHT_DC_MOTOR), &rightMotor);
+
+    // nullptr rejected
+    DigiRover r2;
+    EXPECT_FALSE(r2.initDcMotorMode(nullptr, &rightMotor));
+    EXPECT_EQ(r2.mode(), DigiRover::ROVER_UNSET);
 }
 
 // Per-mode mapping: servo 2-pin uses signed speeds with right side
@@ -102,32 +112,35 @@ TEST(DigiRover, ForwardOnServoModeMirrorsRightSide) {
     EXPECT_EQ(right.lastSetTarget, -40);  // right forward = -(+40)
 }
 
-// DC motor H-bridge: forward puts magnitude on A pin, B pin to 0.
-// Backward puts magnitude on B pin, A pin to 0. Stop: both 0.
-TEST(DigiRover, ForwardBackwardOnDcMotorModeUsesHBridgeMapping) {
+// DC motor: DcMotorChannel encodes direction in the sign of setTarget
+// internally. forward(60) → leftMotor.target = +60 (forward),
+// backward(40) → leftMotor.target = -40 (reverse handled by DcMotor-
+// Channel's _writeHw mapping to the reverse pin).
+TEST(DigiRover, ForwardBackwardOnDcMotorModeUsesSignedTarget) {
     DigiRover r;
-    MockChannel la, lb, ra, rb;
-    r.initDcMotorMode(&la, &lb, &ra, &rb);
+    DcMotorChannel leftMotor(16, 17);
+    DcMotorChannel rightMotor(18, 19);
+    r.initDcMotorMode(&leftMotor, &rightMotor);
 
     r.forward(60);
-    EXPECT_EQ(la.lastSetTarget, 60);
-    EXPECT_EQ(lb.lastSetTarget, 0);
-    EXPECT_EQ(ra.lastSetTarget, 60);
-    EXPECT_EQ(rb.lastSetTarget, 0);
+    EXPECT_EQ(leftMotor.getTarget(),  60);
+    EXPECT_EQ(rightMotor.getTarget(), 60);
     EXPECT_TRUE(r.isMoving());
 
     r.backward(40);
-    EXPECT_EQ(la.lastSetTarget, 0);
-    EXPECT_EQ(lb.lastSetTarget, 40);
-    EXPECT_EQ(ra.lastSetTarget, 0);
-    EXPECT_EQ(rb.lastSetTarget, 40);
+    EXPECT_EQ(leftMotor.getTarget(),  -40);
+    EXPECT_EQ(rightMotor.getTarget(), -40);
 
     r.stop();
-    EXPECT_EQ(la.lastSetTarget, 0);
-    EXPECT_EQ(lb.lastSetTarget, 0);
-    EXPECT_EQ(ra.lastSetTarget, 0);
-    EXPECT_EQ(rb.lastSetTarget, 0);
+    EXPECT_EQ(leftMotor.getTarget(),  0);
+    EXPECT_EQ(rightMotor.getTarget(), 0);
     EXPECT_FALSE(r.isMoving());
+
+    // Spin-in-place: leftMotor reverse, rightMotor forward (sign mirror
+    // is built into _drive; verify both motors see the expected sign).
+    r.spinLeft(40);
+    EXPECT_EQ(leftMotor.getTarget(),  -40);
+    EXPECT_EQ(rightMotor.getTarget(),  40);
 }
 
 TEST(DigiRover, SetChannelTrimForwardsToIndexedChannel) {
