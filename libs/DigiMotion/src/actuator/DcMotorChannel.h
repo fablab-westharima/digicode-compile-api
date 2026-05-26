@@ -49,6 +49,9 @@ public:
 #endif
         _attached = true;
         _writeHw(_current);  // initial HW state = stored velocity (default 0 = brake)
+#ifdef ARDUINO_ARCH_ESP32
+        getBackgroundPump().registerPumpable(this);
+#endif
         return true;
     }
     void detach() override {
@@ -57,6 +60,7 @@ public:
         ledcWrite(_reversePin, 0);
         ledcDetach(_forwardPin);
         ledcDetach(_reversePin);
+        getBackgroundPump().unregisterPumpable(this);
 #endif
         _attached = false;
     }

@@ -53,6 +53,9 @@ public:
         _stepper->setAcceleration(_maxRate > 0 ? (long)_maxRate * 2 : 1000);
 #endif
         _attached = true;
+#ifdef ARDUINO_ARCH_ESP32
+        getBackgroundPump().registerPumpable(this);
+#endif
         return true;
     }
 
@@ -62,6 +65,7 @@ public:
             _stepper->forceStop();
             _stepper = nullptr;
         }
+        getBackgroundPump().unregisterPumpable(this);
 #endif
         _attached = false;
     }

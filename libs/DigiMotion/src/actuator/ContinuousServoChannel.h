@@ -41,11 +41,15 @@ public:
 #endif
         _attached = true;
         _writeHw(_current);  // initial HW state = stop center (+trim)
+#ifdef ARDUINO_ARCH_ESP32
+        getBackgroundPump().registerPumpable(this);
+#endif
         return true;
     }
     void detach() override {
 #ifdef ARDUINO_ARCH_ESP32
         _servo.detach();
+        getBackgroundPump().unregisterPumpable(this);
 #endif
         _attached = false;
     }

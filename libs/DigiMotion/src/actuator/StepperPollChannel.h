@@ -80,11 +80,15 @@ public:
         _stepper.setAcceleration(200.0f);
 #endif
         _attached = true;
+#ifdef ARDUINO_ARCH_ESP32
+        getBackgroundPump().registerPumpable(this);
+#endif
         return true;
     }
     void detach() override {
 #ifdef ARDUINO_ARCH_ESP32
         _stepper.disableOutputs();
+        getBackgroundPump().unregisterPumpable(this);
 #endif
         _attached = false;
     }
