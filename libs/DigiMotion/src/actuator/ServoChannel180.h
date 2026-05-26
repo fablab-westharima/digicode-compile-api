@@ -37,7 +37,13 @@ public:
         _servo.attach(_pin, _pulseMin, _pulseMax);
 #endif
         _attached = true;
-        _writeHw(_current);  // initial HW state = stored target (+trim, +clamp)
+        // Phase F-5 (Session 157、サーボピクつき真因 1 解消): boot 時 90° 強制移動廃止
+        // = attach 直後の _writeHw(_current=90) 削除、 servo は pump 経路経由で初回 HW write。
+        // 物理動作: boot 後 setTarget + pump tick まで servo 脱力 (= gear stress 最小、 ピクつき解消)。
+        // user code 視点契約: 初回 setTarget 後 ~1ms (= pump tick interval) で HW 反映、 pre-Phase-F-5
+        // の「attach 直後に _current 位置で固定」 とは異なる contract。 setTrim/setReverse/setPulseRange
+        // 経由の直接 _writeHw path (= attached なら _writeHw(_current) 即書込) は preserve、 これらは
+        // pump 経路通らない直接 HW reflection。
 #ifdef ARDUINO_ARCH_ESP32
         getBackgroundPump().registerPumpable(this);
 #endif

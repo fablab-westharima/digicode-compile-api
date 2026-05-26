@@ -170,11 +170,20 @@ TEST(ContinuousServo, TargetClampMinusOneHundredToPlusOneHundred) {
 }
 
 TEST(ContinuousServo, ZeroVelocityMapsToStopCenter) {
+    // Phase F-5 (Session 157): attach() 内 _writeHw(_current) 削除後、 stop center pulse は
+    // pump 経路経由で初回 emit される new contract。 default _current=0, _target=0 だと
+    // ServoChannel180/Continuous の pump() early return (`if (_current == _target) return;`)
+    // で _writeHw skip = _lastWrittenHw=-1 維持。 「停止状態の brake pulse 維持」 は user code
+    // 側で setTarget(non-zero) → setTarget(0) + pump の 2-step が必要 = boot 時 servo 脱力で
+    // gear stress 最小化 (= Session 157 主軸 2 真因 1 解消) の trade-off。
     ContinuousServoChannel ch(15);
     ch.attach();
+    ch.setTarget(50);  // arbitrary non-zero to force pump() advance path
+    ch.pump(0);
+    EXPECT_EQ(ch.getLastWrittenHw(), 135);  // 50% forward = 90 + 50*0.9 = 135
     ch.setTarget(0);
     ch.pump(0);
-    EXPECT_EQ(ch.getLastWrittenHw(), 90);
+    EXPECT_EQ(ch.getLastWrittenHw(), 90);   // stop center via pump
 }
 
 TEST(ContinuousServo, FullForwardMapsToOneEighty) {

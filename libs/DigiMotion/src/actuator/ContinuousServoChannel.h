@@ -40,7 +40,10 @@ public:
         _servo.attach(_pin, _pulseMin, _pulseMax);
 #endif
         _attached = true;
-        _writeHw(_current);  // initial HW state = stop center (+trim)
+        // Phase F-5 (Session 157、サーボピクつき真因 1 解消): attach 直後の _writeHw(_current=0
+        // = stop center) 削除、 motor は pump 経路経由で初回 HW write。 連続回転 servo の場合 boot
+        // 時 servo 脱力 = 慣性で停止 (= pre-Phase-F-5 では強制 90° pulse で center brake)、 user code
+        // setTarget(0) + pump で center brake が pump 経由で発動。
 #ifdef ARDUINO_ARCH_ESP32
         getBackgroundPump().registerPumpable(this);
 #endif

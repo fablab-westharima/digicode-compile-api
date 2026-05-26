@@ -48,7 +48,10 @@ public:
         ledcAttach(_reversePin, PWM_FREQ_HZ, PWM_RES_BITS);
 #endif
         _attached = true;
-        _writeHw(_current);  // initial HW state = stored velocity (default 0 = brake)
+        // Phase F-5 (Session 157、サーボピクつき真因 1 解消 = motor brake 起因 boot 時 noise 緩和):
+        // attach 直後の _writeHw(_current=0 = brake = duty 0+0) 削除、 DC motor は pump 経路経由で
+        // 初回 HW write。 LEDC attach 直後の default duty は 0 (= 両 pin LOW = brake)、 PWM 出力
+        // start (= ledcWrite) なしでも motor 停止状態維持、 setTarget + pump で velocity emit。
 #ifdef ARDUINO_ARCH_ESP32
         getBackgroundPump().registerPumpable(this);
 #endif

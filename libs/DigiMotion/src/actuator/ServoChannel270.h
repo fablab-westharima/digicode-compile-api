@@ -34,7 +34,8 @@ public:
         _servo.attach(_pin, _pulseMin, _pulseMax);
 #endif
         _attached = true;
-        _writeHw(_current);  // initial HW state = stored target (+trim, +clamp)
+        // Phase F-5 (Session 157、サーボピクつき真因 1 解消): 同 ServoChannel180 = attach 直後の
+        // _writeHw(_current=135) 削除、 servo は pump 経路経由で初回 HW write。
 #ifdef ARDUINO_ARCH_ESP32
         getBackgroundPump().registerPumpable(this);
 #endif
