@@ -273,21 +273,30 @@ private:
     struct MotionShape {
         int amp[CHANNEL_COUNT];
         double phase[CHANNEL_COUNT];
+        int offset[CHANNEL_COUNT];   // delta added to HOME_DEG per channel (balance bias)
     };
 
-    static constexpr double PI_      = 3.14159265358979;
-    static constexpr double HALF_PI_ = 1.57079632679490;
+    static constexpr double PI_            = 3.14159265358979;
+    static constexpr double HALF_PI_       = 1.57079632679490;
+    static constexpr double THREE_HALF_PI_ = 4.71238898038469;
 
-    // Distinct from DigiBiped patterns AND from any Otto-transform
-    // hardcoded array. Hips drive the major motion; feet provide
-    // balance/secondary motion.
-    static constexpr MotionShape SHIFT_SHAPE       = {{45, 45, 0, 0}, {0.0, 0.0, 0.0, 0.0}};
-    static constexpr MotionShape WALK_SHAPE        = {{28, 28, 15, 15}, {0.0, PI_, PI_, 0.0}};
-    static constexpr MotionShape TURN_SHAPE        = {{18, 18, 25, 25}, {0.0, PI_, 0.0, PI_}};
-    static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 40, 40}, {0.0, 0.0, 0.0, 0.0}};
-    static constexpr MotionShape ROLL_ROTATE_SHAPE = {{5, 5, 35, 35}, {0.0, PI_, 0.0, PI_}};
-    static constexpr MotionShape PUSHUP_SHAPE      = {{32, 32, 20, 20}, {0.0, 0.0, HALF_PI_, HALF_PI_}};
-    static constexpr MotionShape DANCE_SHAPE       = {{25, 18, 22, 27}, {0.0, HALF_PI_, PI_, 4.71238898038469}};
+    // ── Mirror-mount physics (channels LEFT_HIP, RIGHT_HIP, LEFT_FOOT,
+    //    RIGHT_FOOT) ── same principle as DigiBiped: a left/right pair driven
+    //    in-phase moves in OPPOSITE physical directions (alternating); driven
+    //    anti-phase it moves the SAME physical direction (together). Phase
+    //    *relationships* are derived from this physics per motion; amplitude /
+    //    offset magnitudes are DigiCode-original (Phase E hardware-tunable).
+    //    The earlier anti-phase-hip WALK/TURN ({0, π} hips) produced a sumo-
+    //    shuffle on a mirror-mounted frame (Session 159).
+    //    NOTE: roll-mode mechanics (ROLL / ROLL_ROTATE) depend on the
+    //    transformer linkage and need Phase E hardware confirmation.
+    static constexpr MotionShape SHIFT_SHAPE       = {{45, 45, 0, 0},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // hips fold together (anti-phase elec)
+    static constexpr MotionShape WALK_SHAPE        = {{26, 26, 14, 14}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 3, -3}};  // alternating legs (in-phase hips)
+    static constexpr MotionShape TURN_SHAPE        = {{22, 8, 14, 14},  {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 0, 0}};   // dir swaps hip amp
+    static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 38, 38},   {0.0, 0.0, 0.0, PI_},               {0, 0, 0, 0}};   // feet roll together (anti-phase elec)
+    static constexpr MotionShape ROLL_ROTATE_SHAPE = {{5, 5, 33, 33},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec)
+    static constexpr MotionShape PUSHUP_SHAPE      = {{30, 30, 18, 18}, {0.0, PI_, 0.0, PI_},               {0, 0, 0, 0}};   // push together (anti-phase elec)
+    static constexpr MotionShape DANCE_SHAPE       = {{22, 18, 20, 24}, {0.0, 0.0, HALF_PI_, THREE_HALF_PI_}, {0, 0, 0, 0}}; // expressive in-phase hips
 
     const MotionShape& _shapeFor(MotionId m) const {
         switch (m) {
@@ -311,9 +320,23 @@ private:
         _motionStartMs = nowMs;
 
         const MotionShape& s = _shapeFor(m);
+
+        // Working copy + physically-meaningful direction transform (NOT a
+        // global amplitude sign flip — Session 159).
+        int    amp[CHANNEL_COUNT];
+        double phase[CHANNEL_COUNT];
+        int    offset[CHANNEL_COUNT];
+        for (int i = 0; i < CHANNEL_COUNT; ++i) {
+            amp[i]    = s.amp[i];
+            phase[i]  = s.phase[i];
+            offset[i] = s.offset[i];
+        }
+        _applyDirection(m, amp, phase);
+
         int maxAmp = 0;
         for (int i = 0; i < CHANNEL_COUNT; ++i) {
-            if (s.amp[i] > maxAmp) maxAmp = s.amp[i];
+            int a = (amp[i] >= 0) ? amp[i] : -amp[i];
+            if (a > maxAmp) maxAmp = a;
         }
         if (maxAmp == 0) maxAmp = 1;
         _periodMs = (speedDegPerSec > 0)
@@ -322,11 +345,39 @@ private:
         if (_periodMs < MIN_PERIOD_MS) _periodMs = MIN_PERIOD_MS;
 
         for (int i = 0; i < CHANNEL_COUNT; ++i) {
-            _osc[i].setAmplitude(s.amp[i] * _direction);
-            _osc[i].setOffset(HOME_DEG);
+            _osc[i].setAmplitude(amp[i]);
+            _osc[i].setOffset(HOME_DEG + offset[i]);
             _osc[i].setPeriod(_periodMs);
-            _osc[i].setPhase(s.phase[i]);
+            _osc[i].setPhase(phase[i]);
             _osc[i].start(nowMs);
+        }
+    }
+
+    // Physically-meaningful direction transform (mirror-mount aware):
+    //   WALK            : backward flips the foot weight-shift phase by π.
+    //   ROLL / ROLL_ROTATE : reverse rolls/spins by flipping the foot phase.
+    //   TURN            : right turn swaps the asymmetric hip amplitudes.
+    //   SHIFT/PUSHUP/DANCE : invoked with direction = +1 (no transform).
+    void _applyDirection(MotionId m, int amp[CHANNEL_COUNT],
+                         double phase[CHANNEL_COUNT]) {
+        switch (m) {
+            case MOTION_WALK:
+            case MOTION_ROLL:
+            case MOTION_ROLL_ROTATE:
+                if (_direction < 0) {
+                    phase[LEFT_FOOT]  += PI_;
+                    phase[RIGHT_FOOT] += PI_;
+                }
+                break;
+            case MOTION_TURN:
+                if (_direction < 0) {
+                    int t = amp[LEFT_HIP];
+                    amp[LEFT_HIP]  = amp[RIGHT_HIP];
+                    amp[RIGHT_HIP] = t;
+                }
+                break;
+            default:
+                break;
         }
     }
 

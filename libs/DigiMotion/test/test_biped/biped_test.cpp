@@ -303,14 +303,37 @@ TEST(DigiBiped, WalkAsyncTickAdvancesTargetsOnAllChannels) {
     EXPECT_FALSE(biped.isIdle());  // still walking (4 cycles requested)
 }
 
+// Session 159 mirror-mount physics regression: WALK drives the left and
+// right HIP channels with the SAME amplitude + phase + offset, so their
+// published targets are identical at every tick (on a mirror-mounted frame
+// that yields opposite physical rotation = an alternating gait). The earlier
+// anti-phase-hip values made these differ, producing a sumo-shuffle on real
+// hardware. The feet carry a small ±offset balance bias (so they differ by
+// the offset delta), confirming the offset[] dimension is wired through.
+TEST(DigiBiped, WalkHipsAreInPhaseFeetCarryOffsetBias) {
+    DigiBiped biped;
+    MockChannel ll, rl, lf, rf;
+    biped.attachChannels(&ll, &rl, &lf, &rf);
+    biped.init();
+
+    biped.walkAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0);
+    biped.tick(366);  // ~quarter period → mid-swing, non-home targets
+
+    // Hips identical (in-phase, equal amp/offset) — the core fix.
+    EXPECT_EQ(ll.lastSetTarget, rl.lastSetTarget);
+    EXPECT_NE(ll.lastSetTarget, DigiBiped::HOME_DEG);  // motion is happening
+    // Feet share amp+phase but differ by the {+3,-3} offset bias.
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 6);
+}
+
 TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {
     DigiBiped biped;
     MockChannel ll, rl, lf, rf;
     biped.attachChannels(&ll, &rl, &lf, &rf);
     biped.init();
 
-    // speed=60, walk pattern max amp=25 → period = 4*25*1000/60 ≈ 1666 ms.
-    // 2 cycles target → after t >= 2*1666 = 3332 ms, motion completes.
+    // speed=60, walk pattern max amp=22 → period = 4*22*1000/60 ≈ 1466 ms.
+    // 2 cycles target → after t >= 2*1466 = 2933 ms, motion completes.
     biped.walkAsync(/*steps=*/2, /*direction=*/1, /*speed=*/60, /*nowMs=*/0);
     biped.tick(500);
     biped.tick(1500);

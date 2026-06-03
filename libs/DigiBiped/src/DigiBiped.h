@@ -24,11 +24,17 @@
  *     this class's tick(nowMs).
  *   - No legacy-humanoid instance variable name (T5 §11). The instance
  *     name in generator emit is `biped`.
- *   - Motion patterns (amplitude / phase per channel per motion) are new
- *     numerical designs structurally distinct from Otto's hardcoded
- *     {30,30,20,20} amplitude + {0,0,90,90} phase. WALK_SHAPE uses
- *     {25,25,18,18} + 4-distinct quarter-phases {0, π, π/2, 3π/2}; the
- *     other 6 motions use further distinct value+structure combinations.
+ *   - Motion patterns: the per-channel PHASE RELATIONSHIPS are derived from
+ *     the physics of a mirror-mounted servo frame (a left/right pair driven
+ *     in-phase rotates in opposite physical directions → alternating gait;
+ *     see the MotionShape section). This is a functional necessity, not a
+ *     copied table — any correct mirror-mounted biped (Otto included) shares
+ *     the in-phase-hip relationship because the hardware geometry dictates
+ *     it. The amplitude and offset MAGNITUDES are DigiCode-original values
+ *     (e.g. WALK = {22,22,16,16} amp, {0,0,90,90}° phase, {0,0,+3,-3}
+ *     offset), not Otto's {30,30,20,20} / {0,0,4,-4}. Session 159 corrected
+ *     the earlier anti-phase-hip values that, while numerically distinct
+ *     from Otto, were physically wrong (sumo-shuffle on real hardware).
  *
  * Platform abstraction: header-inline implementation. Blocking polling
  * methods (walkBlocking etc.) are #ifdef ARDUINO_ARCH_ESP32 — on native
@@ -325,53 +331,79 @@ private:
     struct MotionShape {
         int amp[CHANNEL_COUNT];
         double phase[CHANNEL_COUNT];
+        int offset[CHANNEL_COUNT];   // delta added to HOME_DEG per channel (balance bias)
     };
 
     // π constants used to avoid <cmath> M_PI POSIX-only dependency.
     static constexpr double PI_      = 3.14159265358979;
     static constexpr double HALF_PI_ = 1.57079632679490;
     static constexpr double THREE_HALF_PI_ = 4.71238898038469;
-    static constexpr double QUARTER_PI_ = 0.78539816339745;
-    static constexpr double FIVE_QUARTER_PI_ = 3.92699081698724;
-    static constexpr double TWO_THIRD_PI_ = 2.09439510239319;
-    static constexpr double FOUR_THIRD_PI_ = 4.18879020478639;
-    static constexpr double ONE_THIRD_PI_ = 1.04719755119660;
 
-    // WALK: legs > feet, 4-distinct-phase quarter-rotation. Structurally
-    // different from Otto's pair-aligned [0,0,90,90].
+    // ── Mirror-mount physics (channels LEFT_LEG, RIGHT_LEG, LEFT_FOOT,
+    //    RIGHT_FOOT; servo horns face each other on a humanoid frame) ──
+    //   A left/right pair driven with the SAME electrical phase rotates in
+    //   OPPOSITE physical directions (the mount mirrors one side) → the legs
+    //   alternate (true bipedal gait). A pair driven ANTI-phase moves the
+    //   same physical direction → both limbs swing together. The previous
+    //   SHAPE values used anti-phase hips ({0, π}) which, on a mirror-mounted
+    //   frame, produced a "both legs together / sumo shuffle" motion instead
+    //   of an alternating walk (Session 159 hardware finding). The phase
+    //   *relationships* below are derived from this physics; the amplitude /
+    //   offset magnitudes are DigiCode-original values (Phase E hardware-
+    //   tunable starting points), not copied from any external library.
+    //   `offset[]` is a per-channel bias added to HOME_DEG (90°).
+
+    // WALK: hips alternate (pair in-phase) for the stride; feet share phase
+    // a quarter-cycle ahead for the weight-shift, with a small ±bias so the
+    // stance foot carries the body. Backward = foot phase flipped (see
+    // _applyDirection), NOT a global amplitude sign change.
     static constexpr MotionShape WALK_SHAPE = {
-        {25, 25, 18, 18},
-        {0.0, PI_, HALF_PI_, THREE_HALF_PI_}
+        {22, 22, 16, 16},
+        {0.0, 0.0, HALF_PI_, HALF_PI_},
+        {0, 0, 3, -3}
     };
-    // TURN: feet > legs (counter to walk), anti-phase pairs.
+    // TURN: same in-phase hip stride as walk; handedness comes from an
+    // asymmetric hip amplitude (the outer leg steps more). Base = left turn;
+    // _applyDirection swaps the hip amplitudes for a right turn.
     static constexpr MotionShape TURN_SHAPE = {
-        {20, 20, 22, 22},
-        {0.0, PI_, PI_, 0.0}
+        {22, 8, 16, 16},
+        {0.0, 0.0, HALF_PI_, HALF_PI_},
+        {0, 0, 0, 0}
     };
-    // JUMP: all in-phase, max amp.
+    // JUMP: hips static, both ankles snap-extend together. Same physical
+    // direction (push off) ⇒ feet anti-phase electrically.
     static constexpr MotionShape JUMP_SHAPE = {
-        {35, 35, 35, 35},
-        {0.0, 0.0, 0.0, 0.0}
+        {0, 0, 32, 32},
+        {0.0, 0.0, 0.0, PI_},
+        {0, 0, 0, 0}
     };
-    // DANCE: asymmetric amps + 3-phase rotation.
+    // DANCE: expressive — hips alternate (in-phase) while feet syncopate a
+    // half-cycle apart for a playful look.
     static constexpr MotionShape DANCE_SHAPE = {
-        {28, 22, 15, 19},
-        {0.0, TWO_THIRD_PI_, FOUR_THIRD_PI_, ONE_THIRD_PI_}
+        {20, 20, 18, 18},
+        {0.0, 0.0, HALF_PI_, THREE_HALF_PI_},
+        {0, 0, 0, 0}
     };
-    // SWING: legs static, feet anti-phase.
+    // SWING: hips static, both feet rock the body side-to-side together
+    // (same physical direction ⇒ feet anti-phase electrically).
     static constexpr MotionShape SWING_SHAPE = {
-        {0, 0, 25, 25},
-        {0.0, 0.0, 0.0, PI_}
+        {0, 0, 22, 22},
+        {0.0, 0.0, 0.0, PI_},
+        {0, 0, 0, 0}
     };
-    // BEND: legs only, anti-phase.
+    // BEND: lean to one side — both hips tilt the body the same physical
+    // direction ⇒ hips anti-phase electrically. _applyDirection negates the
+    // amplitudes to lean the other way.
     static constexpr MotionShape BEND_SHAPE = {
-        {20, 20, 0, 0},
-        {0.0, PI_, 0.0, 0.0}
+        {18, 18, 0, 0},
+        {0.0, PI_, 0.0, 0.0},
+        {0, 0, 0, 0}
     };
-    // MOONWALK: all-amp, staggered π/4 phase increments.
+    // MOONWALK: walk-like in-phase hips with a distinct slower foot timing.
     static constexpr MotionShape MOONWALK_SHAPE = {
-        {22, 22, 22, 22},
-        {0.0, QUARTER_PI_, PI_, FIVE_QUARTER_PI_}
+        {20, 20, 18, 18},
+        {0.0, 0.0, HALF_PI_, HALF_PI_},
+        {0, 0, 0, 0}
     };
 
     const MotionShape& _shapeFor(MotionId m) const {
@@ -397,6 +429,20 @@ private:
 
         const MotionShape& s = _shapeFor(m);
 
+        // Working copy of the shape; direction is applied as a physically-
+        // meaningful transform per motion (NOT a global amplitude sign flip,
+        // which reversed every channel and produced unnatural backward
+        // motion — Session 159).
+        int    amp[CHANNEL_COUNT];
+        double phase[CHANNEL_COUNT];
+        int    offset[CHANNEL_COUNT];
+        for (int i = 0; i < CHANNEL_COUNT; ++i) {
+            amp[i]    = s.amp[i];
+            phase[i]  = s.phase[i];
+            offset[i] = s.offset[i];
+        }
+        _applyDirection(m, amp, phase);
+
         // Period in ms = 4 * maxAmp * 1000 / speedDegPerSec.
         // Rationale: peak angular velocity of a sin wave with amplitude
         // A and period T is A * 2π / T deg/sec. Setting this equal to
@@ -405,7 +451,8 @@ private:
         // since speedDegPerSec is the design-level cap not the peak).
         int maxAmp = 0;
         for (int i = 0; i < CHANNEL_COUNT; ++i) {
-            if (s.amp[i] > maxAmp) maxAmp = s.amp[i];
+            int a = (amp[i] >= 0) ? amp[i] : -amp[i];
+            if (a > maxAmp) maxAmp = a;
         }
         if (maxAmp == 0) maxAmp = 1;  // degenerate-shape guard (e.g. all-zero)
         _periodMs = (speedDegPerSec > 0)
@@ -414,11 +461,46 @@ private:
         if (_periodMs < MIN_PERIOD_MS) _periodMs = MIN_PERIOD_MS;
 
         for (int i = 0; i < CHANNEL_COUNT; ++i) {
-            _osc[i].setAmplitude(s.amp[i] * _direction);
-            _osc[i].setOffset(HOME_DEG);
+            _osc[i].setAmplitude(amp[i]);
+            _osc[i].setOffset(HOME_DEG + offset[i]);
             _osc[i].setPeriod(_periodMs);
-            _osc[i].setPhase(s.phase[i]);
+            _osc[i].setPhase(phase[i]);
             _osc[i].start(nowMs);
+        }
+    }
+
+    // Physically-meaningful direction transform (mirror-mount aware):
+    //   WALK / MOONWALK : backward flips the foot weight-shift phase by π,
+    //                     keeping the alternating-leg (in-phase hip) gait.
+    //   TURN            : right turn swaps the asymmetric hip amplitudes so
+    //                     the opposite leg becomes the outer (longer) step.
+    //   BEND            : the other lean direction negates the amplitudes.
+    //   others          : direction not applicable (cycle-count motions are
+    //                     invoked with direction = +1).
+    void _applyDirection(MotionId m, int amp[CHANNEL_COUNT],
+                         double phase[CHANNEL_COUNT]) {
+        switch (m) {
+            case MOTION_WALK:
+            case MOTION_MOONWALK:
+                if (_direction < 0) {
+                    phase[LEFT_FOOT]  += PI_;
+                    phase[RIGHT_FOOT] += PI_;
+                }
+                break;
+            case MOTION_TURN:
+                if (_direction < 0) {
+                    int t = amp[LEFT_LEG];
+                    amp[LEFT_LEG]  = amp[RIGHT_LEG];
+                    amp[RIGHT_LEG] = t;
+                }
+                break;
+            case MOTION_BEND:
+                if (_direction < 0) {
+                    for (int i = 0; i < CHANNEL_COUNT; ++i) amp[i] = -amp[i];
+                }
+                break;
+            default:
+                break;
         }
     }
 

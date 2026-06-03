@@ -200,13 +200,17 @@ private:
             if (_channels[RIGHT_SERVO] != nullptr)
                 _channels[RIGHT_SERVO]->setTarget(-rightSigned);
         } else if (_mode == ROVER_DC_MOTOR_4PIN) {
-            // DcMotorChannel handles direction via sign of target
-            // internally (Phase X-1.5 Q-D=A refactor: was per-pin
-            // _setHBridgeSide split, now 1 channel = 1 complete motor).
+            // DcMotorChannel handles direction via sign of target internally.
+            // Session 159: the right motor is sign-mirrored here, exactly like
+            // servo mode above — both wheels are mounted facing each other on
+            // a differential-drive chassis, so robot-forward = left shaft
+            // forward + right shaft reverse. Without this, forward() spun the
+            // bot in place on a standard mirror-mounted DC chassis. Users with
+            // a non-mirrored wiring can flip it back via setChannelReverse.
             if (_channels[LEFT_DC_MOTOR] != nullptr)
                 _channels[LEFT_DC_MOTOR]->setTarget(leftSigned);
             if (_channels[RIGHT_DC_MOTOR] != nullptr)
-                _channels[RIGHT_DC_MOTOR]->setTarget(rightSigned);
+                _channels[RIGHT_DC_MOTOR]->setTarget(-rightSigned);
         }
         _isMoving = (leftSigned != 0) || (rightSigned != 0);
     }

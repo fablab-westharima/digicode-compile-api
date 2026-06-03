@@ -205,6 +205,23 @@ TEST(DigiMorpher, RollAsyncDrivesTargetsInRollMode) {
     EXPECT_FALSE(m.walkAsync(1, 1, 60, 0));
 }
 
+// Session 159 mirror-mount physics regression (mirrors the DigiBiped test):
+// WALK drives both HIP channels in-phase (identical targets) for an
+// alternating gait on a mirror-mounted frame; feet carry the ±offset bias.
+TEST(DigiMorpher, WalkHipsAreInPhaseFeetCarryOffsetBias) {
+    DigiMorpher m;
+    MockChannel lh, rh, lf, rf;
+    m.attachChannels(&lh, &rh, &lf, &rf);
+    m.init();
+    // Default mode is MORPH_WALK.
+    EXPECT_TRUE(m.walkAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0));
+    m.tick(366);
+
+    EXPECT_EQ(lh.lastSetTarget, rh.lastSetTarget);          // hips in-phase
+    EXPECT_NE(lh.lastSetTarget, DigiMorpher::HOME_DEG);     // motion happening
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 6);      // feet ±3 offset bias
+}
+
 TEST(DigiMorpher, StopReturnsToIdleAndHome) {
     DigiMorpher m;
     MockChannel lh, rh, lf, rf;

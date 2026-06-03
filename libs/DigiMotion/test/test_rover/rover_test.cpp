@@ -117,9 +117,9 @@ TEST(DigiRover, ForwardOnServoModeMirrorsRightSide) {
 }
 
 // DC motor: DcMotorChannel encodes direction in the sign of setTarget
-// internally. forward(60) → leftMotor.target = +60 (forward),
-// backward(40) → leftMotor.target = -40 (reverse handled by DcMotor-
-// Channel's _writeHw mapping to the reverse pin).
+// internally. Session 159: the right motor is sign-mirrored in _drive,
+// matching servo mode (both wheels mounted facing each other), so
+// forward(60) → leftMotor.target = +60, rightMotor.target = -60.
 TEST(DigiRover, ForwardBackwardOnDcMotorModeUsesSignedTarget) {
     DigiRover r;
     DcMotorChannel leftMotor(16, 17);
@@ -128,23 +128,23 @@ TEST(DigiRover, ForwardBackwardOnDcMotorModeUsesSignedTarget) {
 
     r.forward(60);
     EXPECT_EQ(leftMotor.getTarget(),  60);
-    EXPECT_EQ(rightMotor.getTarget(), 60);
+    EXPECT_EQ(rightMotor.getTarget(), -60);  // mirrored (Session 159)
     EXPECT_TRUE(r.isMoving());
 
     r.backward(40);
     EXPECT_EQ(leftMotor.getTarget(),  -40);
-    EXPECT_EQ(rightMotor.getTarget(), -40);
+    EXPECT_EQ(rightMotor.getTarget(),  40);  // mirrored
 
     r.stop();
     EXPECT_EQ(leftMotor.getTarget(),  0);
     EXPECT_EQ(rightMotor.getTarget(), 0);
     EXPECT_FALSE(r.isMoving());
 
-    // Spin-in-place: leftMotor reverse, rightMotor forward (sign mirror
-    // is built into _drive; verify both motors see the expected sign).
+    // Spin-in-place (left): _drive(-40, +40); right is sign-mirrored →
+    // rightMotor sees -40, both motors same sign for an in-place spin.
     r.spinLeft(40);
     EXPECT_EQ(leftMotor.getTarget(),  -40);
-    EXPECT_EQ(rightMotor.getTarget(),  40);
+    EXPECT_EQ(rightMotor.getTarget(), -40);  // -(+40) mirrored
 }
 
 TEST(DigiRover, SetChannelTrimForwardsToIndexedChannel) {
