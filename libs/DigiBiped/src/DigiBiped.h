@@ -355,8 +355,9 @@ private:
 
     // WALK: hips alternate (pair in-phase) for the stride; feet share phase
     // a quarter-cycle ahead for the weight-shift, with a small ±bias so the
-    // stance foot carries the body. Backward = foot phase flipped (see
-    // _applyDirection), NOT a global amplitude sign change.
+    // stance foot carries the body. Forward = foot phase flipped by π (see
+    // _applyDirection; Session 160 hardware finding: the base π/2 phase drives
+    // the body backward), NOT a global amplitude sign change.
     static constexpr MotionShape WALK_SHAPE = {
         {22, 22, 16, 16},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
@@ -470,8 +471,11 @@ private:
     }
 
     // Physically-meaningful direction transform (mirror-mount aware):
-    //   WALK / MOONWALK : backward flips the foot weight-shift phase by π,
+    //   WALK            : forward flips the foot weight-shift phase by π
+    //                     (Session 160 hardware finding — base π/2 = backward),
     //                     keeping the alternating-leg (in-phase hip) gait.
+    //   MOONWALK        : always invoked with direction = +1; phasing left
+    //                     unchanged pending its own hardware verification.
     //   TURN            : right turn swaps the asymmetric hip amplitudes so
     //                     the opposite leg becomes the outer (longer) step.
     //   BEND            : the other lean direction negates the amplitudes.
@@ -481,7 +485,22 @@ private:
                          double phase[CHANNEL_COUNT]) {
         switch (m) {
             case MOTION_WALK:
+                // Session 160 hardware finding: with the in-phase-hip gait, the
+                // base foot weight-shift phase (π/2) drives the body BACKWARD on
+                // the mirror-mounted frame. Forward travel needs the foot phase
+                // advanced by π, so the flip is applied for direction = +1
+                // (forward) — the opposite of the pre-160 convention.
+                if (_direction > 0) {
+                    phase[LEFT_FOOT]  += PI_;
+                    phase[RIGHT_FOOT] += PI_;
+                }
+                break;
             case MOTION_MOONWALK:
+                // Moonwalk is always invoked with direction = +1 (no UI choice)
+                // and was NOT part of the Session 160 forward/backward finding;
+                // phasing is left unchanged pending its own hardware
+                // verification. Keyed on direction < 0 (a no-op at the
+                // hardcoded +1) to preserve the exact pre-160 behavior.
                 if (_direction < 0) {
                     phase[LEFT_FOOT]  += PI_;
                     phase[RIGHT_FOOT] += PI_;

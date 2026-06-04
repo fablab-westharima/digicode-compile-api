@@ -354,16 +354,31 @@ private:
     }
 
     // Physically-meaningful direction transform (mirror-mount aware):
-    //   WALK            : backward flips the foot weight-shift phase by π.
-    //   ROLL / ROLL_ROTATE : reverse rolls/spins by flipping the foot phase.
+    //   WALK            : forward flips the foot weight-shift phase by π
+    //                     (Session 160 hardware finding; base π/2 = backward).
+    //   ROLL / ROLL_ROTATE : reverse rolls/spins by flipping the foot phase;
+    //                     direction convention left unchanged pending Phase E
+    //                     roll-mode hardware verification (different mechanism).
     //   TURN            : right turn swaps the asymmetric hip amplitudes.
     //   SHIFT/PUSHUP/DANCE : invoked with direction = +1 (no transform).
     void _applyDirection(MotionId m, int amp[CHANNEL_COUNT],
                          double phase[CHANNEL_COUNT]) {
         switch (m) {
             case MOTION_WALK:
+                // Session 160: forward flips the foot weight-shift phase by π
+                // (base π/2 drives the body backward on the mirror-mounted
+                // frame — same hardware finding as DigiBiped WALK).
+                if (_direction > 0) {
+                    phase[LEFT_FOOT]  += PI_;
+                    phase[RIGHT_FOOT] += PI_;
+                }
+                break;
             case MOTION_ROLL:
             case MOTION_ROLL_ROTATE:
+                // Roll-mode is a different mechanism (rolling, not gait) and is
+                // unverified on hardware (Phase E roll-mode check). Direction
+                // convention left unchanged — NOT assumed to share WALK's
+                // reversal.
                 if (_direction < 0) {
                     phase[LEFT_FOOT]  += PI_;
                     phase[RIGHT_FOOT] += PI_;
