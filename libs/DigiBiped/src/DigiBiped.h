@@ -359,7 +359,7 @@ private:
     // _applyDirection; Session 160 hardware finding: the base π/2 phase drives
     // the body backward), NOT a global amplitude sign change.
     static constexpr MotionShape WALK_SHAPE = {
-        {22, 22, 16, 16},
+        {30, 30, 22, 22},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 3, -3}
     };
@@ -367,28 +367,28 @@ private:
     // asymmetric hip amplitude (the outer leg steps more). Base = left turn;
     // _applyDirection swaps the hip amplitudes for a right turn.
     static constexpr MotionShape TURN_SHAPE = {
-        {22, 8, 16, 16},
+        {30, 11, 21, 21},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 0, 0}
     };
     // JUMP: hips static, both ankles snap-extend together. Same physical
     // direction (push off) ⇒ feet anti-phase electrically.
     static constexpr MotionShape JUMP_SHAPE = {
-        {0, 0, 32, 32},
+        {0, 0, 40, 40},
         {0.0, 0.0, 0.0, PI_},
         {0, 0, 0, 0}
     };
     // DANCE: expressive — hips alternate (in-phase) while feet syncopate a
     // half-cycle apart for a playful look.
     static constexpr MotionShape DANCE_SHAPE = {
-        {20, 20, 18, 18},
+        {27, 27, 24, 24},
         {0.0, 0.0, HALF_PI_, THREE_HALF_PI_},
         {0, 0, 0, 0}
     };
     // SWING: hips static, both feet rock the body side-to-side together
     // (same physical direction ⇒ feet anti-phase electrically).
     static constexpr MotionShape SWING_SHAPE = {
-        {0, 0, 22, 22},
+        {0, 0, 30, 30},
         {0.0, 0.0, 0.0, PI_},
         {0, 0, 0, 0}
     };
@@ -396,13 +396,13 @@ private:
     // direction ⇒ hips anti-phase electrically. _applyDirection negates the
     // amplitudes to lean the other way.
     static constexpr MotionShape BEND_SHAPE = {
-        {18, 18, 0, 0},
+        {24, 24, 0, 0},
         {0.0, PI_, 0.0, 0.0},
         {0, 0, 0, 0}
     };
     // MOONWALK: walk-like in-phase hips with a distinct slower foot timing.
     static constexpr MotionShape MOONWALK_SHAPE = {
-        {20, 20, 18, 18},
+        {27, 27, 24, 24},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 0, 0}
     };
