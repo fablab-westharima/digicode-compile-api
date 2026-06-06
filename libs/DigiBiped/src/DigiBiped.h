@@ -476,8 +476,10 @@ private:
     //                     keeping the alternating-leg (in-phase hip) gait.
     //   MOONWALK        : always invoked with direction = +1; phasing left
     //                     unchanged pending its own hardware verification.
-    //   TURN            : right turn swaps the asymmetric hip amplitudes so
-    //                     the opposite leg becomes the outer (longer) step.
+    //   TURN            : unconditionally flips the foot weight-shift phase by
+    //                     π (turn travels forward, not backward — same root as
+    //                     WALK; Session 160 hardware finding) and swaps the
+    //                     asymmetric hip amplitudes for a right turn (handedness).
     //   BEND            : the other lean direction negates the amplitudes.
     //   others          : direction not applicable (cycle-count motions are
     //                     invoked with direction = +1).
@@ -507,6 +509,17 @@ private:
                 }
                 break;
             case MOTION_TURN:
+                // The turn is a walk with asymmetric hips: the hip-amp swap
+                // sets rotation handedness (left/right) while the foot
+                // weight-shift phase sets forward/backward travel — same as
+                // WALK. The base π/2 foot phase travels BACKWARD (Session 160
+                // hardware finding: "turning while moving backward", same root
+                // as WALK). The hip-amp swap does NOT change the hip↔foot phase
+                // relationship, so travel direction is identical for both turn
+                // directions → flip the foot phase UNCONDITIONALLY so both left
+                // and right turns rotate while moving forward.
+                phase[LEFT_FOOT]  += PI_;
+                phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_LEG];
                     amp[LEFT_LEG]  = amp[RIGHT_LEG];

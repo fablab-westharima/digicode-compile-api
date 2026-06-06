@@ -359,7 +359,9 @@ private:
     //   ROLL / ROLL_ROTATE : reverse rolls/spins by flipping the foot phase;
     //                     direction convention left unchanged pending Phase E
     //                     roll-mode hardware verification (different mechanism).
-    //   TURN            : right turn swaps the asymmetric hip amplitudes.
+    //   TURN            : unconditionally flips the foot phase by π (travels
+    //                     forward, same root as WALK; Session 160) + swaps hip
+    //                     amplitudes for a right turn (handedness).
     //   SHIFT/PUSHUP/DANCE : invoked with direction = +1 (no transform).
     void _applyDirection(MotionId m, int amp[CHANNEL_COUNT],
                          double phase[CHANNEL_COUNT]) {
@@ -385,6 +387,13 @@ private:
                 }
                 break;
             case MOTION_TURN:
+                // Same as DigiBiped TURN (Session 160 hardware finding): the
+                // base π/2 foot weight-shift phase travels BACKWARD. The
+                // hip-amp swap (handedness) does not change the hip↔foot phase
+                // relationship, so flip the foot phase UNCONDITIONALLY → both
+                // left and right turns rotate while moving forward.
+                phase[LEFT_FOOT]  += PI_;
+                phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_HIP];
                     amp[LEFT_HIP]  = amp[RIGHT_HIP];
