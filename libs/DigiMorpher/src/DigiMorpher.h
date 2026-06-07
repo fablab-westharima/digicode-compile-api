@@ -292,7 +292,7 @@ private:
     //    transformer linkage and need Phase E hardware confirmation.
     static constexpr MotionShape SHIFT_SHAPE       = {{45, 45, 0, 0},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // hips fold together (anti-phase elec)
     static constexpr MotionShape WALK_SHAPE        = {{40, 40, 35, 35}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 8, -8}};  // alternating legs (in-phase hips)
-    static constexpr MotionShape TURN_SHAPE        = {{42, 14, 33, 33}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 10, -10}}; // walk-gait arc: in-phase feet + 旋回側 foot freeze (amp 0、_applyDirection、Session 160 案B 実機) + hip 差動28 + offset ±10。OTTO 物理・値独自
+    static constexpr MotionShape TURN_SHAPE        = {{42, 14, 19, 19}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 5, -5}};  // walk-gait arc: OTTO 構造 (両足首 in-phase 振動 + hip 非対称 swap) + 足首控えめ amp19/offset±5 = 傾き±24° (Session 160 OTTO-grounded、膨張 ±43° が scrape 真因)。値独自 (OTTO は 20/4)
     static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 45, 45},   {0.0, 0.0, 0.0, PI_},               {0, 0, 0, 0}};   // feet roll together (anti-phase elec)
     static constexpr MotionShape ROLL_ROTATE_SHAPE = {{12, 12, 45, 45}, {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec)
     static constexpr MotionShape PUSHUP_SHAPE      = {{42, 42, 38, 38}, {0.0, PI_, 0.0, PI_},               {0, 0, 0, 0}};   // push together (anti-phase elec)
@@ -387,22 +387,18 @@ private:
                 }
                 break;
             case MOTION_TURN:
-                // Same as DigiBiped TURN (Session 160 案B, real-machine): feet
-                // stay IN-phase and the swing-side foot is FROZEN (amp 0) so its
-                // toe can't be driven into the ground (an unloaded foot over-tilts
-                // on gear backlash and scrapes; the earlier anti-phase attempt
-                // made the stance foot tiptoe too). (1) foot phase +π = forward
-                // travel; (2) dir<0 swap hip amps = handedness; (3) freeze swing
-                // foot: left turn (dir>0) → LEFT, right turn (dir<0) → RIGHT.
+                // Same as DigiBiped TURN (Session 160 OTTO-grounded): OttoDIYLib
+                // structure — BOTH feet oscillate in-phase (foot phase +π = forward
+                // travel) and only the hip amplitudes differ L/R (dir<0 swap =
+                // handedness). The foot tilt is kept modest in TURN_SHAPE
+                // (amp19/offset±5 ≈ ±24°); the inflated ±43° tilt was the scrape
+                // cause, not the phase.
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_HIP];
                     amp[LEFT_HIP]  = amp[RIGHT_HIP];
                     amp[RIGHT_HIP] = t;
-                    amp[RIGHT_FOOT] = 0;  // right turn: freeze right (swing) foot
-                } else {
-                    amp[LEFT_FOOT]  = 0;  // left turn: freeze left (swing) foot
                 }
                 break;
             default:

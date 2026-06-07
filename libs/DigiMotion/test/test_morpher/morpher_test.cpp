@@ -222,13 +222,12 @@ TEST(DigiMorpher, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);     // feet ±8 offset bias (Session 160 dynamic)
 }
 
-// Session 160 (案B, real-machine revision; mirrors the DigiBiped turn test): TURN
-// FREEZES the swing-side foot (amp 0) while the stance foot oscillates, so a
-// motionless foot can't drive its toe into the ground (the earlier anti-phase
-// attempt made the stance foot tiptoe too). Left turn (dir+1) → LEFT foot frozen
-// at HOME+offset; RIGHT (stance) oscillates. Default mode MORPH_WALK; turn is a
-// walk-mode motion.
-TEST(DigiMorpher, TurnFreezesSwingFootStanceFootOscillates) {
+// Session 160 (OTTO-grounded fix, real-machine; mirrors the DigiBiped turn test):
+// the scrape came from foot tilt inflated ~1.8x past OttoDIYLib (±43° vs ±24°).
+// Fix keeps OTTO's structure — BOTH feet oscillate IN-phase, only hips differ
+// L/R — at a modest tilt. In-phase + equal amp ⇒ foot targets differ only by the
+// fixed ±offset gap (2*5 = 10). Default mode MORPH_WALK; turn is a walk-mode motion.
+TEST(DigiMorpher, TurnFeetOscillateInPhaseWithModestTilt) {
     DigiMorpher m;
     MockChannel lh, rh, lf, rf;
     m.attachChannels(&lh, &rh, &lf, &rf);
@@ -237,8 +236,11 @@ TEST(DigiMorpher, TurnFreezesSwingFootStanceFootOscillates) {
     EXPECT_TRUE(m.turnAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0));
     m.tick(366);
 
-    EXPECT_EQ(lf.lastSetTarget, DigiMorpher::HOME_DEG + 10);  // swing (left) frozen at HOME+offset
-    EXPECT_NE(rf.lastSetTarget, DigiMorpher::HOME_DEG - 10);  // stance (right) oscillating off its rest
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 10);       // in-phase feet (neither frozen)
+    EXPECT_GE(lf.lastSetTarget, DigiMorpher::HOME_DEG - 24);  // modest tilt (OTTO ground-clearance)
+    EXPECT_LE(lf.lastSetTarget, DigiMorpher::HOME_DEG + 24);
+    EXPECT_GE(rf.lastSetTarget, DigiMorpher::HOME_DEG - 24);
+    EXPECT_LE(rf.lastSetTarget, DigiMorpher::HOME_DEG + 24);
     EXPECT_NE(lh.lastSetTarget, rh.lastSetTarget);            // hips asymmetric → turn handedness
 }
 

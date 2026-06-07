@@ -326,12 +326,13 @@ TEST(DigiBiped, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);
 }
 
-// Session 160 (案B, real-machine revision): the anti-phase attempt made the
-// STANCE foot tiptoe too, so TURN now FREEZES the swing-side foot (amp 0) while
-// the stance foot oscillates to carry the body. A motionless foot can't drive its
-// toe into the ground. Left turn (dir+1) → LEFT foot is the swing side → held at
-// HOME + its offset (amp 0 ⇒ no oscillation, exact); RIGHT (stance) oscillates.
-TEST(DigiBiped, TurnFreezesSwingFootStanceFootOscillates) {
+// Session 160 (OTTO-grounded fix, real-machine): the toe-scrape came from foot
+// amplitude/offset inflated ~1.8x past OttoDIYLib's proven values (±43° tilt vs
+// OTTO's ±24° "tiptoe a little bit"). Fix keeps OTTO's turn STRUCTURE — BOTH feet
+// oscillate IN-phase (neither frozen nor anti-phase), only the hips differ L/R —
+// and brings the foot tilt back to a modest band. In-phase + equal amp means the
+// two foot targets differ only by the fixed ±offset gap (2*5 = 10).
+TEST(DigiBiped, TurnFeetOscillateInPhaseWithModestTilt) {
     DigiBiped biped;
     MockChannel ll, rl, lf, rf;
     biped.attachChannels(&ll, &rl, &lf, &rf);
@@ -340,10 +341,16 @@ TEST(DigiBiped, TurnFreezesSwingFootStanceFootOscillates) {
     biped.turnAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0);
     biped.tick(366);
 
-    EXPECT_EQ(lf.lastSetTarget, DigiBiped::HOME_DEG + 10);  // swing (left) frozen at HOME+offset
-    EXPECT_NE(rf.lastSetTarget, DigiBiped::HOME_DEG - 10);  // stance (right) oscillating off its rest
+    // Both feet oscillate in-phase (neither frozen): targets differ only by the
+    // fixed ±offset gap (2*5 = 10).
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 10);
+    // Modest tilt — feet stay within OTTO's ground-clearance band (±24° of HOME);
+    // the inflated ±43° version drove a foot below HOME-24 and scraped.
+    EXPECT_GE(lf.lastSetTarget, DigiBiped::HOME_DEG - 24);
+    EXPECT_LE(lf.lastSetTarget, DigiBiped::HOME_DEG + 24);
+    EXPECT_GE(rf.lastSetTarget, DigiBiped::HOME_DEG - 24);
+    EXPECT_LE(rf.lastSetTarget, DigiBiped::HOME_DEG + 24);
     EXPECT_NE(ll.lastSetTarget, rl.lastSetTarget);          // hips asymmetric → turn handedness
-    EXPECT_NE(ll.lastSetTarget, DigiBiped::HOME_DEG);       // motion is happening
 }
 
 TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {
