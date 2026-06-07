@@ -363,13 +363,17 @@ private:
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 3, -3}
     };
-    // TURN: same in-phase hip stride as walk; handedness comes from an
-    // asymmetric hip amplitude (the outer leg steps more). Base = left turn;
-    // _applyDirection swaps the hip amplitudes for a right turn.
+    // TURN: walk gait with asymmetric hip amplitudes (same coordination as
+    // WALK: in-phase hips + foot weight-shift + foot ±offset). Only the hip amp
+    // differs L/R so the bigger-stepping leg makes the robot arc; the foot phase
+    // is flipped UNCONDITIONALLY so BOTH turn directions travel forward.
+    // Session 160: restored the foot offset {0,0,3,-3} (was {0,0,0,0} = no
+    // weight-shift = no visible arc) + hip asymmetry {30,8}; matches OTTO turn
+    // physics (walk-gait + hip-amp arc) with DigiCode-original values.
     static constexpr MotionShape TURN_SHAPE = {
-        {30, 0, 21, 21},
+        {30, 8, 22, 22},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
-        {0, 0, 0, 0}
+        {0, 0, 3, -3}
     };
     // JUMP: hips static, both ankles snap-extend together. Same physical
     // direction (push off) ⇒ feet anti-phase electrically.
