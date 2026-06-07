@@ -326,13 +326,13 @@ TEST(DigiBiped, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);
 }
 
-// Session 160 (OTTO-grounded fix, real-machine): the toe-scrape came from foot
-// amplitude/offset inflated ~1.8x past OttoDIYLib's proven values (±43° tilt vs
-// OTTO's ±24° "tiptoe a little bit"). Fix keeps OTTO's turn STRUCTURE — BOTH feet
-// oscillate IN-phase (neither frozen nor anti-phase), only the hips differ L/R —
-// and brings the foot tilt back to a modest band. In-phase + equal amp means the
-// two foot targets differ only by the fixed ±offset gap (2*5 = 10).
-TEST(DigiBiped, TurnFeetOscillateInPhaseWithModestTilt) {
+// Session 160 (final, real-machine): the toe-scrape was a LOGIC bug (anti-phase /
+// foot-freeze), not amplitude — with OTTO's structure restored (both feet in-phase,
+// only hips asymmetric) the foot amp/offset are set IDENTICAL to WALK (amp 35,
+// offset ±8). TURN and WALK differ only in the hip differential, exactly as in
+// OttoDIYLib (turn feet == walk feet). In-phase + equal amp ⇒ foot targets differ
+// only by the fixed ±offset gap (2*8 = 16), the same value the WALK test asserts.
+TEST(DigiBiped, TurnFeetMatchWalkOnlyHipsDiffer) {
     DigiBiped biped;
     MockChannel ll, rl, lf, rf;
     biped.attachChannels(&ll, &rl, &lf, &rf);
@@ -341,16 +341,11 @@ TEST(DigiBiped, TurnFeetOscillateInPhaseWithModestTilt) {
     biped.turnAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0);
     biped.tick(366);
 
-    // Both feet oscillate in-phase (neither frozen): targets differ only by the
-    // fixed ±offset gap (2*5 = 10).
-    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 10);
-    // Modest tilt — feet stay within OTTO's ground-clearance band (±24° of HOME);
-    // the inflated ±43° version drove a foot below HOME-24 and scraped.
-    EXPECT_GE(lf.lastSetTarget, DigiBiped::HOME_DEG - 24);
-    EXPECT_LE(lf.lastSetTarget, DigiBiped::HOME_DEG + 24);
-    EXPECT_GE(rf.lastSetTarget, DigiBiped::HOME_DEG - 24);
-    EXPECT_LE(rf.lastSetTarget, DigiBiped::HOME_DEG + 24);
-    EXPECT_NE(ll.lastSetTarget, rl.lastSetTarget);          // hips asymmetric → turn handedness
+    // Feet in-phase with the WALK offset gap (2*8 = 16) — both oscillate, neither
+    // frozen; identical to the WALK foot configuration.
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);
+    EXPECT_NE(lf.lastSetTarget, DigiBiped::HOME_DEG + 8);   // left foot off its rest (oscillating)
+    EXPECT_NE(ll.lastSetTarget, rl.lastSetTarget);          // hips asymmetric → turn handedness (only diff from WALK)
 }
 
 TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {

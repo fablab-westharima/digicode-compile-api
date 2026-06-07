@@ -363,23 +363,21 @@ private:
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 8, -8}
     };
-    // TURN: walk-gait arc — asymmetric hip amplitudes (差動 28 = {42,14}) make
-    // the bigger-stepping leg sweep the robot into an arc; _applyDirection swaps
-    // the hip amps on dir<0 for handedness. Session 160 real-machine finding
-    // (Takeda, on an OttoDIY-Humanoid frame): the toe-scrape was caused by the
-    // foot amplitude+offset being inflated ~1.8x past OttoDIYLib's proven values,
-    // tilting the foot ±43° where OTTO keeps it ±24° ("to tiptoe a little bit").
-    // On the same OTTO hardware that over-tilt digs the toe into the ground. Fix:
-    // keep OTTO's structure (BOTH feet oscillate in-phase, only the hips differ
-    // L/R) and bring the foot tilt back into OTTO's modest ground-clearance band —
-    // amp 19 + offset ±5 ⇒ servo 66°…114° (±24° of HOME). Foot phase still +π for
-    // forward travel. (Two earlier attempts failed on hardware: anti-phase rolled
-    // the stance foot onto its toe; freezing the swing foot diverged from OTTO.)
-    // Values DigiCode-original; OTTO turn() is amp 20 / offset 4 — not copied.
+    // TURN: walk-gait arc — IDENTICAL to WALK except the hip amplitudes are made
+    // asymmetric (差動 28 = {42,14}) so the bigger-stepping leg arcs the robot. The
+    // feet use the SAME amp/offset as WALK (35 / ±8); OttoDIYLib does the same —
+    // turn feet == walk feet, only the hips differ. Session 160 real-machine: the
+    // earlier toe-scrape was a LOGIC bug (anti-phase / foot-freeze, invented while
+    // mistaking the bipedal phase relationship — a physical law — for something to
+    // "originalize" around GPL), NOT the foot amplitude. With OTTO's structure
+    // restored (both feet oscillate in-phase, only hips asymmetric, foot phase +π
+    // for forward travel) WALK's proven foot values do not scrape. Values
+    // DigiCode-original (OTTO is amp 20 / offset 4 — not copied; the shared physics
+    // is the turn-feet == walk-feet relationship, not the numbers).
     static constexpr MotionShape TURN_SHAPE = {
-        {42, 14, 19, 19},
+        {42, 14, 35, 35},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
-        {0, 0, 5, -5}
+        {0, 0, 8, -8}
     };
     // JUMP: hips static, both ankles snap-extend together. Same physical
     // direction (push off) ⇒ feet anti-phase electrically.
@@ -521,10 +519,11 @@ private:
             case MOTION_TURN:
                 // Turn = walk-gait arc, OttoDIYLib structure: BOTH feet oscillate
                 // in-phase (foot phase +π UNCONDITIONALLY = forward travel, same
-                // root as WALK) and only the hip amplitudes differ L/R. The dir<0
-                // swap sets rotation handedness. The foot tilt magnitude is kept
-                // modest in TURN_SHAPE (OTTO ground-clearance, ±24°) so the toe
-                // doesn't scrape — that, not the phase, was the Session 160 fix.
+                // root as WALK) and only the hip amplitudes differ L/R (the dir<0
+                // swap sets rotation handedness). Foot amp/offset equal WALK's
+                // (TURN_SHAPE) — turn and walk differ ONLY in the hips, as in
+                // OttoDIYLib. The Session 160 scrape was a logic bug (anti-phase /
+                // foot-freeze); the fix was restoring this structure, not amplitude.
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {

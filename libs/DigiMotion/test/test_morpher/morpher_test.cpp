@@ -222,12 +222,12 @@ TEST(DigiMorpher, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);     // feet ±8 offset bias (Session 160 dynamic)
 }
 
-// Session 160 (OTTO-grounded fix, real-machine; mirrors the DigiBiped turn test):
-// the scrape came from foot tilt inflated ~1.8x past OttoDIYLib (±43° vs ±24°).
-// Fix keeps OTTO's structure — BOTH feet oscillate IN-phase, only hips differ
-// L/R — at a modest tilt. In-phase + equal amp ⇒ foot targets differ only by the
-// fixed ±offset gap (2*5 = 10). Default mode MORPH_WALK; turn is a walk-mode motion.
-TEST(DigiMorpher, TurnFeetOscillateInPhaseWithModestTilt) {
+// Session 160 (final, real-machine; mirrors the DigiBiped turn test): the scrape
+// was a LOGIC bug (anti-phase/freeze), not amplitude. With OTTO's structure
+// restored, TURN foot amp/offset are set IDENTICAL to WALK (35 / ±8) — turn==walk
+// feet, only hips differ. In-phase + equal amp ⇒ foot targets differ only by the
+// fixed ±offset gap (2*8 = 16). Default mode MORPH_WALK; turn is a walk-mode motion.
+TEST(DigiMorpher, TurnFeetMatchWalkOnlyHipsDiffer) {
     DigiMorpher m;
     MockChannel lh, rh, lf, rf;
     m.attachChannels(&lh, &rh, &lf, &rf);
@@ -236,12 +236,9 @@ TEST(DigiMorpher, TurnFeetOscillateInPhaseWithModestTilt) {
     EXPECT_TRUE(m.turnAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0));
     m.tick(366);
 
-    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 10);       // in-phase feet (neither frozen)
-    EXPECT_GE(lf.lastSetTarget, DigiMorpher::HOME_DEG - 24);  // modest tilt (OTTO ground-clearance)
-    EXPECT_LE(lf.lastSetTarget, DigiMorpher::HOME_DEG + 24);
-    EXPECT_GE(rf.lastSetTarget, DigiMorpher::HOME_DEG - 24);
-    EXPECT_LE(rf.lastSetTarget, DigiMorpher::HOME_DEG + 24);
-    EXPECT_NE(lh.lastSetTarget, rh.lastSetTarget);            // hips asymmetric → turn handedness
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);      // in-phase feet, WALK offset gap (neither frozen)
+    EXPECT_NE(lf.lastSetTarget, DigiMorpher::HOME_DEG + 8);  // left foot off its rest (oscillating)
+    EXPECT_NE(lh.lastSetTarget, rh.lastSetTarget);           // hips asymmetric → turn handedness
 }
 
 TEST(DigiMorpher, StopReturnsToIdleAndHome) {
