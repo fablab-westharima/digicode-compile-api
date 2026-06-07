@@ -326,12 +326,13 @@ TEST(DigiBiped, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);
 }
 
-// Session 160 (final, real-machine): the toe-scrape was a LOGIC bug (anti-phase /
-// foot-freeze), not amplitude — with OTTO's structure restored (both feet in-phase,
-// only hips asymmetric) the foot amp/offset are set IDENTICAL to WALK (amp 35,
-// offset ±8). TURN and WALK differ only in the hip differential, exactly as in
-// OttoDIYLib (turn feet == walk feet). In-phase + equal amp ⇒ foot targets differ
-// only by the fixed ±offset gap (2*8 = 16), the same value the WALK test asserts.
+// TURN uses the OttoDIYLib-compliant structure (both feet oscillate in-phase, only
+// the hips asymmetric) with the foot amp/offset set IDENTICAL to WALK (amp 35,
+// offset ±8). TURN and WALK differ only in the hip differential, as in OttoDIYLib
+// (turn feet == walk feet). In-phase + equal amp ⇒ foot targets differ only by the
+// fixed ±offset gap (2*8 = 16), the same value the WALK test asserts. (Parameters
+// are set larger than OTTO's originals for backlash / visibility; real-machine
+// verification in progress.) This pins the structural invariant, not a magnitude.
 TEST(DigiBiped, TurnFeetMatchWalkOnlyHipsDiffer) {
     DigiBiped biped;
     MockChannel ll, rl, lf, rf;

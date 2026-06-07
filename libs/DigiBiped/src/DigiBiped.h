@@ -363,17 +363,16 @@ private:
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 8, -8}
     };
-    // TURN: walk-gait arc — IDENTICAL to WALK except the hip amplitudes are made
-    // asymmetric (差動 28 = {42,14}) so the bigger-stepping leg arcs the robot. The
-    // feet use the SAME amp/offset as WALK (35 / ±8); OttoDIYLib does the same —
-    // turn feet == walk feet, only the hips differ. Session 160 real-machine: the
-    // earlier toe-scrape was a LOGIC bug (anti-phase / foot-freeze, invented while
-    // mistaking the bipedal phase relationship — a physical law — for something to
-    // "originalize" around GPL), NOT the foot amplitude. With OTTO's structure
-    // restored (both feet oscillate in-phase, only hips asymmetric, foot phase +π
-    // for forward travel) WALK's proven foot values do not scrape. Values
-    // DigiCode-original (OTTO is amp 20 / offset 4 — not copied; the shared physics
-    // is the turn-feet == walk-feet relationship, not the numbers).
+    // TURN: walk-gait arc — same structure as WALK (OttoDIYLib-compliant: both feet
+    // oscillate in-phase, foot phase +π for forward travel) except the hip
+    // amplitudes are made asymmetric (差動 28 = {42,14}) so the bigger-stepping leg
+    // arcs the robot. The feet use the same amp/offset as WALK (35 / ±8) — turn feet
+    // == walk feet, only the hips differ (OttoDIYLib does the same). The parameters
+    // are set larger than OTTO's originals to overcome gear backlash and make the
+    // motion clearly visible (educational use); real-machine verification is in
+    // progress. Values DigiCode-original (OTTO is amp 20 / offset 4 — not copied; the
+    // shared layer is the physics — the turn-feet == walk-feet relationship — not the
+    // numbers).
     static constexpr MotionShape TURN_SHAPE = {
         {42, 14, 35, 35},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
@@ -522,8 +521,8 @@ private:
                 // root as WALK) and only the hip amplitudes differ L/R (the dir<0
                 // swap sets rotation handedness). Foot amp/offset equal WALK's
                 // (TURN_SHAPE) — turn and walk differ ONLY in the hips, as in
-                // OttoDIYLib. The Session 160 scrape was a logic bug (anti-phase /
-                // foot-freeze); the fix was restoring this structure, not amplitude.
+                // OttoDIYLib. Parameters are set larger than OTTO's originals
+                // (backlash / visibility); real-machine verification in progress.
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {

@@ -222,11 +222,13 @@ TEST(DigiMorpher, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);     // feet ±8 offset bias (Session 160 dynamic)
 }
 
-// Session 160 (final, real-machine; mirrors the DigiBiped turn test): the scrape
-// was a LOGIC bug (anti-phase/freeze), not amplitude. With OTTO's structure
-// restored, TURN foot amp/offset are set IDENTICAL to WALK (35 / ±8) — turn==walk
-// feet, only hips differ. In-phase + equal amp ⇒ foot targets differ only by the
-// fixed ±offset gap (2*8 = 16). Default mode MORPH_WALK; turn is a walk-mode motion.
+// TURN uses the OttoDIYLib-compliant structure (both feet oscillate in-phase, only
+// the hips asymmetric; mirrors the DigiBiped turn test) with the foot amp/offset set
+// IDENTICAL to WALK (35 / ±8) — turn==walk feet, only hips differ. In-phase + equal
+// amp ⇒ foot targets differ only by the fixed ±offset gap (2*8 = 16). (Parameters
+// set larger than OTTO's originals for backlash / visibility; real-machine verify in
+// progress; this pins the structural invariant, not a magnitude.) Default mode
+// MORPH_WALK; turn is a walk-mode motion.
 TEST(DigiMorpher, TurnFeetMatchWalkOnlyHipsDiffer) {
     DigiMorpher m;
     MockChannel lh, rh, lf, rf;
