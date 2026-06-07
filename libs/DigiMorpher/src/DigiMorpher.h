@@ -292,7 +292,7 @@ private:
     //    transformer linkage and need Phase E hardware confirmation.
     static constexpr MotionShape SHIFT_SHAPE       = {{45, 45, 0, 0},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // hips fold together (anti-phase elec)
     static constexpr MotionShape WALK_SHAPE        = {{40, 40, 35, 35}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 8, -8}};  // alternating legs (in-phase hips)
-    static constexpr MotionShape TURN_SHAPE        = {{42, 14, 33, 33}, {0.0, 0.0, HALF_PI_, THREE_HALF_PI_}, {0, 0, 10, -10}}; // walk-gait arc: anti-phase feet (鏡像で同方向 roll → 旋回側 toe-up、Session 160 backlash) + hip 差動28 + offset ±10。OTTO 物理・値独自 (OTTO turn は in-phase feet)
+    static constexpr MotionShape TURN_SHAPE        = {{42, 14, 33, 33}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 10, -10}}; // walk-gait arc: in-phase feet + 旋回側 foot freeze (amp 0、_applyDirection、Session 160 案B 実機) + hip 差動28 + offset ±10。OTTO 物理・値独自
     static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 45, 45},   {0.0, 0.0, 0.0, PI_},               {0, 0, 0, 0}};   // feet roll together (anti-phase elec)
     static constexpr MotionShape ROLL_ROTATE_SHAPE = {{12, 12, 45, 45}, {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec)
     static constexpr MotionShape PUSHUP_SHAPE      = {{42, 42, 38, 38}, {0.0, PI_, 0.0, PI_},               {0, 0, 0, 0}};   // push together (anti-phase elec)
@@ -387,23 +387,22 @@ private:
                 }
                 break;
             case MOTION_TURN:
-                // Same as DigiBiped TURN (Session 160 backlash finding): feet are
-                // anti-phase (TURN_SHAPE) so they roll the body one way and the
-                // SWING toe lifts (a toe-DOWN swing foot scrapes under gear
-                // backlash). (1) foot phase +π UNCONDITIONALLY = forward travel;
-                // (2) dir<0 swap hip amps = handedness; (3) dir<0 swap foot
-                // phases = flip the roll side so the correct (inner) foot loads
-                // per direction (the anti-phase feet roll the same physical way,
-                // so the roll side is fixed by the foot phases).
+                // Same as DigiBiped TURN (Session 160 案B, real-machine): feet
+                // stay IN-phase and the swing-side foot is FROZEN (amp 0) so its
+                // toe can't be driven into the ground (an unloaded foot over-tilts
+                // on gear backlash and scrapes; the earlier anti-phase attempt
+                // made the stance foot tiptoe too). (1) foot phase +π = forward
+                // travel; (2) dir<0 swap hip amps = handedness; (3) freeze swing
+                // foot: left turn (dir>0) → LEFT, right turn (dir<0) → RIGHT.
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_HIP];
                     amp[LEFT_HIP]  = amp[RIGHT_HIP];
                     amp[RIGHT_HIP] = t;
-                    double pt = phase[LEFT_FOOT];
-                    phase[LEFT_FOOT]  = phase[RIGHT_FOOT];
-                    phase[RIGHT_FOOT] = pt;
+                    amp[RIGHT_FOOT] = 0;  // right turn: freeze right (swing) foot
+                } else {
+                    amp[LEFT_FOOT]  = 0;  // left turn: freeze left (swing) foot
                 }
                 break;
             default:

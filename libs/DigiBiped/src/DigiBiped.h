@@ -365,19 +365,19 @@ private:
     };
     // TURN: walk-gait arc — asymmetric hip amplitudes (差動 28 = {42,14}) make
     // the bigger-stepping leg sweep the robot into an arc; _applyDirection swaps
-    // the hip amps on dir<0 for handedness. Session 160 backlash finding (Takeda
-    // hardware analysis): the feet must ROLL the body to one side (lateral weight
-    // shift) so the SWING-side toe LIFTS off the ground. A toe-DOWN swing foot
-    // scrapes because, unloaded, gear backlash lets it over-tilt past the
-    // commanded angle. So the feet are ANTI-phase electrically ({π/2, 3π/2}) →
-    // on the mirror mount they tilt the SAME physical direction (τ_L = τ_R, a
-    // clean roll), NOT the in-phase counter-tilt that WALK and OTTO turn() use.
-    // _applyDirection also swaps the foot phases on dir<0 so the correct (inner)
-    // foot loads for each turn direction. Foot phase still +π (forward travel).
-    // Values DigiCode-original (OTTO turn() uses in-phase feet, offset {4,-4}).
+    // the hip amps on dir<0 for handedness. Session 160 real-machine finding
+    // (Takeda): the swing-side foot must NOT drive its toe down — under no load,
+    // gear backlash lets it over-tilt and scrape. (An earlier anti-phase attempt
+    // to ROLL the swing toe up instead made the STANCE foot tiptoe too — the
+    // mirror-direction physics interpretation was wrong.) Robust fix (案B): the
+    // feet stay IN-phase (like WALK) and _applyDirection FREEZES the swing-side
+    // foot (amp 0) per turn direction while the stance foot oscillates to carry
+    // the body — a motionless foot can't push its toe into the ground. Foot phase
+    // still +π for forward travel. DigiCode-original values (OTTO turn()
+    // oscillates both feet in-phase, offset {4,-4}).
     static constexpr MotionShape TURN_SHAPE = {
         {42, 14, 33, 33},
-        {0.0, 0.0, HALF_PI_, THREE_HALF_PI_},
+        {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 10, -10}
     };
     // JUMP: hips static, both ankles snap-extend together. Same physical
@@ -518,29 +518,28 @@ private:
                 }
                 break;
             case MOTION_TURN:
-                // Turn = walk-gait arc with anti-phase feet (TURN_SHAPE). Three
-                // transforms:
+                // Turn = walk-gait arc. Transforms:
                 //  (1) foot phase +π UNCONDITIONALLY → forward travel for both
                 //      turn directions (base π/2 travels backward, same root as
                 //      WALK; Session 160 hardware finding).
                 //  (2) dir<0: swap hip amplitudes → rotation handedness.
-                //  (3) dir<0: swap foot phases → flip the body-roll side. The
-                //      anti-phase feet roll the SAME physical direction
-                //      (τ_L = τ_R), so the roll side is fixed by the foot phases;
-                //      without (3) both turn directions would roll the same way
-                //      and the WRONG (outer) foot would load on one of them
-                //      (Session 160 backlash finding). Swapping the two foot
-                //      phases reverses the roll so the inner foot loads and the
-                //      swing toe lifts for each direction.
+                //  (3) FREEZE the swing-side foot (amp 0) so its toe can't be
+                //      driven into the ground (Session 160 real-machine finding:
+                //      an unloaded foot over-tilts on gear backlash and scrapes;
+                //      案B = simplest robust fix, after the anti-phase roll
+                //      attempt made the stance foot tiptoe too). Left turn
+                //      (dir>0) → LEFT foot is the swing side; right turn (dir<0)
+                //      → RIGHT. The stance foot keeps its amplitude to carry the
+                //      body.
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_LEG];
                     amp[LEFT_LEG]  = amp[RIGHT_LEG];
                     amp[RIGHT_LEG] = t;
-                    double pt = phase[LEFT_FOOT];
-                    phase[LEFT_FOOT]  = phase[RIGHT_FOOT];
-                    phase[RIGHT_FOOT] = pt;
+                    amp[RIGHT_FOOT] = 0;  // right turn: freeze right (swing) foot
+                } else {
+                    amp[LEFT_FOOT]  = 0;  // left turn: freeze left (swing) foot
                 }
                 break;
             case MOTION_BEND:
