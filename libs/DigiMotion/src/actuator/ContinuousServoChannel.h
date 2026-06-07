@@ -40,6 +40,9 @@ public:
         _servo.attach(_pin, _pulseMin, _pulseMax);
 #endif
         _attached = true;
+        // Session 160 case 24: (re)attach resets so the first command re-establishes HW position.
+        _positionKnown = false;
+        _commanded = false;
         // Phase F-5 (Session 157、サーボピクつき真因 1 解消): attach 直後の _writeHw(_current=0
         // = stop center) 削除、 motor は pump 経路経由で初回 HW write。 連続回転 servo の場合 boot
         // 時 servo 脱力 = 慣性で停止 (= pre-Phase-F-5 では強制 90° pulse で center brake)、 user code
@@ -62,10 +65,11 @@ public:
         if (target < VELOCITY_MIN) target = VELOCITY_MIN;
         if (target > VELOCITY_MAX) target = VELOCITY_MAX;
         _target = (int)target;
+        _commanded = true;  // Session 160 case 24: first command gates pump-driven HW establish
     }
     long getTarget() const override { return _target; }
     long getCurrent() const override { return _current; }
-    bool hasReachedTarget() const override { return _current == _target; }
+    bool hasReachedTarget() const override { return _positionKnown && _current == _target; }
 
     void setPulseRange(int minUs, int maxUs) override {
         _pulseMin = minUs;
@@ -99,11 +103,17 @@ public:
     bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
-    bool isActive() const override { return _attached && _current != _target; }
+    bool isActive() const override { return _attached && _commanded && (!_positionKnown || _current != _target); }
 
     void pump(unsigned long nowMs) override {
         if (!_attached) return;
-        if (_current == _target) return;
+        if (_current == _target) {
+            // Session 160 case 24: Phase F-5 dropped the attach-time write, so a
+            // first command landing on the default value (stop→0) would never
+            // reach HW. Force one write to establish position, then idle.
+            if (!_positionKnown) _writeHw(_current);
+            return;
+        }
         if (_maxRate > 0) {
             int stepMs = 1000 / _maxRate;
             if (stepMs < 1) stepMs = 1;
@@ -124,6 +134,7 @@ protected:
     //   velocity = -100 → angle = DEG_MIN  (reverse, ignoring trim for full)
     // Phase 3-A: reverse=true → velocity sign flip BEFORE PWM mapping.
     virtual void _writeHw(int velocityPercent) {
+        _positionKnown = true;  // Session 160 case 24: any HW write establishes position
         if (_reverse) velocityPercent = -velocityPercent;
         int center = STOP_DEG + _trim;
         int span = (velocityPercent >= 0) ? (DEG_MAX - center) : (center - DEG_MIN);
@@ -144,6 +155,8 @@ protected:
     bool _reverse = false;
     int _target = 0;        // 0 % = stop
     int _current = 0;
+    bool _positionKnown = false;  // Session 160 case 24: HW written >=1 since attach
+    bool _commanded = false;      // setTarget called >=1 since attach
     int _lastWrittenHw = -1;
     unsigned long _lastStepMs = 0;
     bool _attached = false;

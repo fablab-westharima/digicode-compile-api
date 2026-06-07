@@ -37,6 +37,9 @@ public:
         _servo.attach(_pin, _pulseMin, _pulseMax);
 #endif
         _attached = true;
+        // Session 160 case 24: (re)attach resets so the first command re-establishes HW position.
+        _positionKnown = false;
+        _commanded = false;
         // Phase F-5 (Session 157、サーボピクつき真因 1 解消): boot 時 90° 強制移動廃止
         // = attach 直後の _writeHw(_current=90) 削除、 servo は pump 経路経由で初回 HW write。
         // 物理動作: boot 後 setTarget + pump tick まで servo 脱力 (= gear stress 最小、 ピクつき解消)。
@@ -65,10 +68,11 @@ public:
         if (target < ANGLE_MIN) target = ANGLE_MIN;
         if (target > ANGLE_MAX) target = ANGLE_MAX;
         _target = (int)target;
+        _commanded = true;  // Session 160 case 24: first command gates pump-driven HW establish
     }
     long getTarget() const override { return _target; }
     long getCurrent() const override { return _current; }
-    bool hasReachedTarget() const override { return _current == _target; }
+    bool hasReachedTarget() const override { return _positionKnown && _current == _target; }
 
     // === 3-axis ===
     void setPulseRange(int minUs, int maxUs) override {
@@ -104,11 +108,17 @@ public:
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
     // === IPumpable ===
-    bool isActive() const override { return _attached && _current != _target; }
+    bool isActive() const override { return _attached && _commanded && (!_positionKnown || _current != _target); }
 
     void pump(unsigned long nowMs) override {
         if (!_attached) return;
-        if (_current == _target) return;
+        if (_current == _target) {
+            // Session 160 case 24: Phase F-5 dropped the attach-time write, so a
+            // first command landing on the default value (home→90) would never
+            // reach HW. Force one write to establish position, then idle.
+            if (!_positionKnown) _writeHw(_current);
+            return;
+        }
         if (_maxRate > 0) {
             int stepMs = 1000 / _maxRate;
             if (stepMs < 1) stepMs = 1;
@@ -129,6 +139,7 @@ protected:
     // for physically inverted servo mounting. Applied BEFORE trim so trim
     // remains a user-facing offset on the user-facing angle.
     virtual void _writeHw(int valueDeg) {
+        _positionKnown = true;  // Session 160 case 24: any HW write establishes position
         if (_reverse) valueDeg = ANGLE_MAX - valueDeg;
         int trimmed = valueDeg + _trim;
         if (trimmed < ANGLE_MIN) trimmed = ANGLE_MIN;
@@ -147,6 +158,8 @@ protected:
     bool _reverse = false;
     int _target = 90;
     int _current = 90;
+    bool _positionKnown = false;  // Session 160 case 24: HW written >=1 since attach
+    bool _commanded = false;      // setTarget called >=1 since attach
     int _lastWrittenHw = -1;
     unsigned long _lastStepMs = 0;
     bool _attached = false;

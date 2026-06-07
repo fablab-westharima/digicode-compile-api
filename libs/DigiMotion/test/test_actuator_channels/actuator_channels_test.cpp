@@ -171,11 +171,10 @@ TEST(ContinuousServo, TargetClampMinusOneHundredToPlusOneHundred) {
 
 TEST(ContinuousServo, ZeroVelocityMapsToStopCenter) {
     // Phase F-5 (Session 157): attach() 内 _writeHw(_current) 削除後、 stop center pulse は
-    // pump 経路経由で初回 emit される new contract。 default _current=0, _target=0 だと
-    // ServoChannel180/Continuous の pump() early return (`if (_current == _target) return;`)
-    // で _writeHw skip = _lastWrittenHw=-1 維持。 「停止状態の brake pulse 維持」 は user code
-    // 側で setTarget(non-zero) → setTarget(0) + pump の 2-step が必要 = boot 時 servo 脱力で
-    // gear stress 最小化 (= Session 157 主軸 2 真因 1 解消) の trade-off。
+    // pump 経路経由で初回 emit される contract。 Session 160 case 24 (案A: _positionKnown +
+    // _commanded) で「初回 command が default 値 (=0) でも pump で強制 _writeHw」化、 default 0,0 の
+    // 2-step 回避要件は解消 (= PositionKnownFix.* test で検証)。 本 test は非 0 → 0 の通常 ramp
+    // 経路 (50→0) で stop center 90 を検証 (= 案A 後も既存挙動維持)。
     ContinuousServoChannel ch(15);
     ch.attach();
     ch.setTarget(50);  // arbitrary non-zero to force pump() advance path
@@ -587,6 +586,153 @@ TEST(AllChannels, ReverseGettersRespondUniformly) {
         ch->setReverse(false);
         EXPECT_FALSE(ch->getReverse());
     }
+}
+
+// ============================================================================
+// Session 160 case 24: Phase F-5 (attach-time _writeHw removal) + default
+// _current==_target + pump short-circuit made the first command landing on the
+// default value (home→90, stop→0) never reach HW. 案A (_positionKnown +
+// _commanded) establishes HW on the first command even at the default value,
+// while preserving F-5 (no write until first command = no boot twitch).
+// ============================================================================
+
+// ① first command to default writes HW / ② attach 直後 hasReachedTarget=false /
+// ③ pump 前は未確立 (= allReached false で home loop 継続) / F-5: 未 command は
+// isActive=false で BGpump 書込なし (= ピクつき非再発)。④ 全対象 channel。
+TEST(PositionKnownFix, ServoChannel180FirstCommandToDefaultEstablishesHw) {
+    ServoChannel180 ch(27);
+    ch.attach();
+    EXPECT_FALSE(ch.hasReachedTarget());    // ② 未確立 (pre-fix は true)
+    EXPECT_FALSE(ch.isActive());            // F-5: 未 command → BGpump skip
+    EXPECT_EQ(ch.getLastWrittenHw(), -1);   // F-5: attach で無書込
+    ch.setTarget(ch.getTarget());           // 初回 command = default (90)
+    EXPECT_FALSE(ch.hasReachedTarget());     // ③ pump 前は未確立
+    EXPECT_TRUE(ch.isActive());             // commanded + 未確立 → BGpump が pump
+    ch.pump(0);
+    EXPECT_TRUE(ch.hasReachedTarget());     // ① 強制 _writeHw で確立
+    EXPECT_FALSE(ch.isActive());
+    EXPECT_EQ(ch.getLastWrittenHw(), 90);   // ① HW を default(home) へ command
+}
+
+TEST(PositionKnownFix, ServoChannel270FirstCommandToDefaultEstablishesHw) {
+    ServoChannel270 ch(14);
+    ch.attach();
+    EXPECT_FALSE(ch.hasReachedTarget());
+    EXPECT_FALSE(ch.isActive());
+    EXPECT_EQ(ch.getLastWrittenHw(), -1);
+    ch.setTarget(ch.getTarget());           // 135
+    EXPECT_FALSE(ch.hasReachedTarget());
+    EXPECT_TRUE(ch.isActive());
+    ch.pump(0);
+    EXPECT_TRUE(ch.hasReachedTarget());
+    EXPECT_FALSE(ch.isActive());
+    EXPECT_EQ(ch.getLastWrittenHw(), 135);
+}
+
+TEST(PositionKnownFix, ContinuousServoFirstCommandToDefaultEstablishesHw) {
+    ContinuousServoChannel ch(15);
+    ch.attach();
+    EXPECT_FALSE(ch.hasReachedTarget());
+    EXPECT_FALSE(ch.isActive());
+    EXPECT_EQ(ch.getLastWrittenHw(), -1);
+    ch.setTarget(ch.getTarget());           // 0 = stop
+    EXPECT_FALSE(ch.hasReachedTarget());
+    EXPECT_TRUE(ch.isActive());
+    ch.pump(0);
+    EXPECT_TRUE(ch.hasReachedTarget());
+    EXPECT_FALSE(ch.isActive());
+    EXPECT_EQ(ch.getLastWrittenHw(), 90);   // stop center 書込 (pre-fix は -1 維持)
+}
+
+TEST(PositionKnownFix, DcMotorFirstCommandToDefaultEstablishesState) {
+    DcMotorChannel ch(16, 17);
+    ch.attach();
+    EXPECT_FALSE(ch.hasReachedTarget());
+    EXPECT_FALSE(ch.isActive());
+    ch.setTarget(ch.getTarget());           // 0 = brake
+    EXPECT_FALSE(ch.hasReachedTarget());
+    EXPECT_TRUE(ch.isActive());
+    ch.pump(0);
+    EXPECT_TRUE(ch.hasReachedTarget());     // brake 書込で確立 (getLastWrittenHw=0 は default と同値で曖昧 = hasReachedTarget で判定)
+    EXPECT_FALSE(ch.isActive());
+}
+
+// ⑤ 非 default 初回 command は従来通り書込 + 到達 (motion 経路 regression なし)
+TEST(PositionKnownFix, NonDefaultFirstCommandWritesNormally) {
+    ServoChannel180 ch(27);
+    ch.attach();
+    ch.setTarget(120);                      // 非 default (motion-like)
+    EXPECT_TRUE(ch.isActive());
+    ch.pump(0);                             // maxRate 0 → snap
+    EXPECT_EQ(ch.getLastWrittenHw(), 120);
+    EXPECT_TRUE(ch.hasReachedTarget());
+    EXPECT_FALSE(ch.isActive());
+}
+
+// ============================================================================
+// F-5 NO-REGRESSION GUARANTEE (Session 160): the boot twitch that Phase F-5
+// removed MUST NOT come back. Proof at the code level: the BackgroundPump only
+// calls pump() on channels whose isActive() is true
+// (IBackgroundPump.h:114 verbatim: `if (!p->isActive()) continue; p->pump(nowMs);`).
+// Since isActive() stays false until the first setTarget (_commanded gate),
+// pump() is never invoked before the first command → _writeHw is never called
+// → no PWM/HW write at boot → no twitch. The counting subclasses below override
+// _writeHw to count calls (uniform across channel types, avoids the DcMotor
+// getLastWrittenHw=0/-1 ambiguity) and replicate the scan gate verbatim.
+// ============================================================================
+
+struct CountingServo180 : ServoChannel180 {
+    int writeCount = 0;
+    explicit CountingServo180(int p) : ServoChannel180(p) {}
+    void _writeHw(int v) override { ++writeCount; ServoChannel180::_writeHw(v); }
+};
+struct CountingServo270 : ServoChannel270 {
+    int writeCount = 0;
+    explicit CountingServo270(int p) : ServoChannel270(p) {}
+    void _writeHw(int v) override { ++writeCount; ServoChannel270::_writeHw(v); }
+};
+struct CountingContinuous : ContinuousServoChannel {
+    int writeCount = 0;
+    explicit CountingContinuous(int p) : ContinuousServoChannel(p) {}
+    void _writeHw(int v) override { ++writeCount; ContinuousServoChannel::_writeHw(v); }
+};
+struct CountingDcMotor : DcMotorChannel {
+    int writeCount = 0;
+    CountingDcMotor(int f, int r) : DcMotorChannel(f, r) {}
+    void _writeHw(int v) override { ++writeCount; DcMotorChannel::_writeHw(v); }
+};
+
+// items 1+2: simulate many BackgroundPump scans across boot BEFORE any
+// setTarget; verify isActive() stays false and _writeHw is never called.
+// Then the first command (= default value) must produce exactly the establish
+// write (proves the fix did not weaken F-5).
+template <typename Ch>
+static void verifyNoWriteUntilFirstCommand(Ch& ch) {
+    ch.attach();
+    for (unsigned long t = 0; t <= 500; t += 10) {
+        EXPECT_FALSE(ch.isActive());          // item 2: !_commanded → never active
+        if (ch.isActive()) ch.pump(t);        // gate verbatim (IBackgroundPump.h:114-115)
+    }
+    EXPECT_EQ(ch.writeCount, 0);              // item 1: NO _writeHw before first setTarget = no twitch
+    ch.setTarget(ch.getTarget());             // first command = default value (home→90 / stop→0)
+    for (unsigned long t = 600; t <= 1100; t += 10) {
+        if (ch.isActive()) ch.pump(t);        // now active → establish write happens
+    }
+    EXPECT_GT(ch.writeCount, 0);              // fix: first command establishes HW
+    EXPECT_TRUE(ch.hasReachedTarget());
+}
+
+TEST(F5NoRegression, ServoChannel180NoWriteBeforeFirstSetTarget) {
+    CountingServo180 ch(27); verifyNoWriteUntilFirstCommand(ch);
+}
+TEST(F5NoRegression, ServoChannel270NoWriteBeforeFirstSetTarget) {
+    CountingServo270 ch(14); verifyNoWriteUntilFirstCommand(ch);
+}
+TEST(F5NoRegression, ContinuousServoNoWriteBeforeFirstSetTarget) {
+    CountingContinuous ch(15); verifyNoWriteUntilFirstCommand(ch);
+}
+TEST(F5NoRegression, DcMotorNoWriteBeforeFirstSetTarget) {
+    CountingDcMotor ch(16, 17); verifyNoWriteUntilFirstCommand(ch);
 }
 
 int main(int argc, char **argv) {

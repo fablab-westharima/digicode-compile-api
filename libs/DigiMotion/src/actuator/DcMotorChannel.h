@@ -48,6 +48,9 @@ public:
         ledcAttach(_reversePin, PWM_FREQ_HZ, PWM_RES_BITS);
 #endif
         _attached = true;
+        // Session 160 case 24: (re)attach resets so the first command re-establishes HW state.
+        _positionKnown = false;
+        _commanded = false;
         // Phase F-5 (Session 157、サーボピクつき真因 1 解消 = motor brake 起因 boot 時 noise 緩和):
         // attach 直後の _writeHw(_current=0 = brake = duty 0+0) 削除、 DC motor は pump 経路経由で
         // 初回 HW write。 LEDC attach 直後の default duty は 0 (= 両 pin LOW = brake)、 PWM 出力
@@ -73,10 +76,11 @@ public:
         if (target < VELOCITY_MIN) target = VELOCITY_MIN;
         if (target > VELOCITY_MAX) target = VELOCITY_MAX;
         _target = (int)target;
+        _commanded = true;  // Session 160 case 24: first command gates pump-driven HW establish
     }
     long getTarget() const override { return _target; }
     long getCurrent() const override { return _current; }
-    bool hasReachedTarget() const override { return _current == _target; }
+    bool hasReachedTarget() const override { return _positionKnown && _current == _target; }
 
     void setPulseRange(int /*minUs*/, int /*maxUs*/) override {}
     void setMaxRate(int percentPerSec) override { _maxRate = percentPerSec; }
@@ -100,11 +104,17 @@ public:
     bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
-    bool isActive() const override { return _attached && _current != _target; }
+    bool isActive() const override { return _attached && _commanded && (!_positionKnown || _current != _target); }
 
     void pump(unsigned long nowMs) override {
         if (!_attached) return;
-        if (_current == _target) return;
+        if (_current == _target) {
+            // Session 160 case 24: Phase F-5 dropped the attach-time write. For DC
+            // motor the default HW (LEDC duty 0 = brake) already matches, but force
+            // one write on the first command for consistency, then idle.
+            if (!_positionKnown) _writeHw(_current);
+            return;
+        }
         if (_maxRate > 0) {
             int stepMs = 1000 / _maxRate;
             if (stepMs < 1) stepMs = 1;
@@ -123,6 +133,7 @@ protected:
     // Phase 3-A: reverse=true → velocity sign flip (= H-bridge forward/reverse
     // pin swap effect, no field reordering).
     virtual void _writeHw(int velocityPercent) {
+        _positionKnown = true;  // Session 160 case 24: any HW write establishes state
         if (_reverse) velocityPercent = -velocityPercent;
         if (velocityPercent == 0) {
             _lastWrittenHw = 0;
@@ -164,6 +175,8 @@ protected:
     bool _reverse = false;
     int _target = 0;
     int _current = 0;
+    bool _positionKnown = false;  // Session 160 case 24: HW written >=1 since attach
+    bool _commanded = false;      // setTarget called >=1 since attach
     int _lastWrittenHw = 0;
     unsigned long _lastStepMs = 0;
     bool _attached = false;

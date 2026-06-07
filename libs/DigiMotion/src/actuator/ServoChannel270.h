@@ -34,6 +34,9 @@ public:
         _servo.attach(_pin, _pulseMin, _pulseMax);
 #endif
         _attached = true;
+        // Session 160 case 24: (re)attach resets so the first command re-establishes HW position.
+        _positionKnown = false;
+        _commanded = false;
         // Phase F-5 (Session 157、サーボピクつき真因 1 解消): 同 ServoChannel180 = attach 直後の
         // _writeHw(_current=135) 削除、 servo は pump 経路経由で初回 HW write。
 #ifdef ARDUINO_ARCH_ESP32
@@ -54,10 +57,11 @@ public:
         if (target < ANGLE_MIN) target = ANGLE_MIN;
         if (target > ANGLE_MAX) target = ANGLE_MAX;
         _target = (int)target;
+        _commanded = true;  // Session 160 case 24: first command gates pump-driven HW establish
     }
     long getTarget() const override { return _target; }
     long getCurrent() const override { return _current; }
-    bool hasReachedTarget() const override { return _current == _target; }
+    bool hasReachedTarget() const override { return _positionKnown && _current == _target; }
 
     void setPulseRange(int minUs, int maxUs) override {
         _pulseMin = minUs;
@@ -89,11 +93,17 @@ public:
     bool getReverse() const override { return _reverse; }
     int getLastWrittenHw() const override { return _lastWrittenHw; }
 
-    bool isActive() const override { return _attached && _current != _target; }
+    bool isActive() const override { return _attached && _commanded && (!_positionKnown || _current != _target); }
 
     void pump(unsigned long nowMs) override {
         if (!_attached) return;
-        if (_current == _target) return;
+        if (_current == _target) {
+            // Session 160 case 24: Phase F-5 dropped the attach-time write, so a
+            // first command landing on the default value would never reach HW.
+            // Force one write to establish position, then idle.
+            if (!_positionKnown) _writeHw(_current);
+            return;
+        }
         if (_maxRate > 0) {
             int stepMs = 1000 / _maxRate;
             if (stepMs < 1) stepMs = 1;
@@ -110,6 +120,7 @@ protected:
     // Phase 3-A: reverse mirror around ANGLE_MAX (270 - valueDeg) compensates
     // for physically inverted 270° servo mounting. Applied BEFORE trim.
     virtual void _writeHw(int valueDeg) {
+        _positionKnown = true;  // Session 160 case 24: any HW write establishes position
         if (_reverse) valueDeg = ANGLE_MAX - valueDeg;
         int trimmed = valueDeg + _trim;
         if (trimmed < ANGLE_MIN) trimmed = ANGLE_MIN;
@@ -128,6 +139,8 @@ protected:
     bool _reverse = false;
     int _target = 135;       // mid-range for 270° servo
     int _current = 135;
+    bool _positionKnown = false;  // Session 160 case 24: HW written >=1 since attach
+    bool _commanded = false;      // setTarget called >=1 since attach
     int _lastWrittenHw = -1;
     unsigned long _lastStepMs = 0;
     bool _attached = false;
