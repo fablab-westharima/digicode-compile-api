@@ -367,7 +367,7 @@ private:
     // asymmetric hip amplitude (the outer leg steps more). Base = left turn;
     // _applyDirection swaps the hip amplitudes for a right turn.
     static constexpr MotionShape TURN_SHAPE = {
-        {30, 11, 21, 21},
+        {30, 0, 21, 21},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 0, 0}
     };

@@ -292,7 +292,7 @@ private:
     //    transformer linkage and need Phase E hardware confirmation.
     static constexpr MotionShape SHIFT_SHAPE       = {{45, 45, 0, 0},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // hips fold together (anti-phase elec)
     static constexpr MotionShape WALK_SHAPE        = {{35, 35, 19, 19}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 3, -3}};  // alternating legs (in-phase hips)
-    static constexpr MotionShape TURN_SHAPE        = {{30, 11, 18, 18},  {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 0, 0}};   // dir swaps hip amp
+    static constexpr MotionShape TURN_SHAPE        = {{30, 0, 18, 18},  {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 0, 0}};   // dir swaps hip amp
     static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 45, 45},   {0.0, 0.0, 0.0, PI_},               {0, 0, 0, 0}};   // feet roll together (anti-phase elec)
     static constexpr MotionShape ROLL_ROTATE_SHAPE = {{7, 7, 45, 45},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec)
     static constexpr MotionShape PUSHUP_SHAPE      = {{40, 40, 24, 24}, {0.0, PI_, 0.0, PI_},               {0, 0, 0, 0}};   // push together (anti-phase elec)
