@@ -294,7 +294,7 @@ private:
     static constexpr MotionShape WALK_SHAPE        = {{40, 40, 35, 35}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 8, -8}};  // alternating legs (in-phase hips)
     static constexpr MotionShape TURN_SHAPE        = {{42, 14, 35, 35}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 8, -8}};  // walk-gait arc: OTTO 準拠 logic (両足首 in-phase + 前進 +π)、WALK と足首 amp/offset 完全同一 (35/±8)、turn と walk の違いは hip 差動のみ (OttoDIYLib も turn feet==walk feet)。param は OTTO より大きめ (backlash 対策・視認性、実機 verify 中)。値独自
     static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 45, 45},   {0.0, 0.0, 0.0, PI_},               {0, 0, 0, 0}};   // feet roll together (anti-phase elec)
-    static constexpr MotionShape ROLL_ROTATE_SHAPE = {{12, 12, 45, 45}, {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec)
+    static constexpr MotionShape ROLL_ROTATE_SHAPE = {{28, 28, 45, 45}, {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec). Session 162: hip amp 12→28 = visibility 底上げ first-pass (roll-mode は Phase E 実機 verify 待ち); 足首45 / phase / offset 不変
     static constexpr MotionShape PUSHUP_SHAPE      = {{42, 42, 38, 38}, {0.0, PI_, 0.0, PI_},               {0, 0, 0, 0}};   // push together (anti-phase elec)
     static constexpr MotionShape DANCE_SHAPE       = {{40, 32, 38, 42}, {0.0, 0.0, HALF_PI_, THREE_HALF_PI_}, {0, 0, 0, 0}}; // expressive in-phase hips
 

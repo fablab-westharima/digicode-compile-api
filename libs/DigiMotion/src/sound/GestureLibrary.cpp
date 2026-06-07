@@ -38,23 +38,31 @@ constexpr double HALF_PI_ = 1.57079632679490;
 // Each row deliberately differs from DigiBiped's WALK/TURN/JUMP/DANCE/
 // SWING/BEND/MOONWALK static shapes both numerically AND structurally
 // (no full 4-quarter-phase rotation; no symmetric {30,30,20,20} shape).
+//
+// Session 162 motion 底上げ (first-pass, 実機 verify 待ち / R3): 8 可視 gesture
+// (GREETING / ACKNOWLEDGE / YES / NO / CURIOSITY / SEARCH / CONFIRMATION /
+// ERROR_ALERT) の amp magnitude を WALK 基準くらいの可視サイズへ引き上げ。
+// phase / cycles / periodMs / 符号 / 稼働 channel は不変 (logic 維持)。演出系
+// (IDLE_BREATHING / THINKING / SLEEPY / SURPRISE / WAKEUP) と CHEER は意図的に
+// 現状維持。値は独自 first-pass で、最終的な大小は実機 verify で詰める (断定しない)。
+// ERROR_ALERT の足首は 28 (< WALK 35) とし WALK 構造と区別する。
 const GestureDefinition kGestures[GESTURE_COUNT] = {
     /* GESTURE_NONE           */ {{{0, 0, 0, 0}, {0.0, 0.0, 0.0, 0.0}, 0, 0}, BEEP_NONE},
 
-    /* GESTURE_GREETING       */ {{{-15, -15, 0, 0}, {0.0, 0.0, 0.0, 0.0}, 1, 2000}, BEEP_RISING_PAIR},
-    /* GESTURE_ACKNOWLEDGE    */ {{{0, 0, 12, 12},   {0.0, 0.0, 0.0, 0.0}, 2,  600}, BEEP_SHORT_LOW},
-    /* GESTURE_YES            */ {{{15, 15, 15, 15}, {0.0, 0.0, 0.0, 0.0}, 2,  800}, BEEP_TWO_HIGH},
-    /* GESTURE_NO             */ {{{20, 20, 0, 0},   {0.0, PI_, 0.0, 0.0}, 2,  800}, BEEP_TWO_LOW},
-    /* GESTURE_CURIOSITY      */ {{{-10, -10, 15, 15}, {0.0, 0.0, 0.0, PI_}, 1, 1200}, BEEP_QUERY_PAIR},
-    /* GESTURE_SEARCH         */ {{{30, 30, 0, 0},   {0.0, PI_, 0.0, 0.0}, 3,  800}, BEEP_NONE},
+    /* GESTURE_GREETING       */ {{{-38, -38, 0, 0}, {0.0, 0.0, 0.0, 0.0}, 1, 2000}, BEEP_RISING_PAIR},
+    /* GESTURE_ACKNOWLEDGE    */ {{{0, 0, 32, 32},   {0.0, 0.0, 0.0, 0.0}, 2,  600}, BEEP_SHORT_LOW},
+    /* GESTURE_YES            */ {{{34, 34, 32, 32}, {0.0, 0.0, 0.0, 0.0}, 2,  800}, BEEP_TWO_HIGH},
+    /* GESTURE_NO             */ {{{40, 40, 0, 0},   {0.0, PI_, 0.0, 0.0}, 2,  800}, BEEP_TWO_LOW},
+    /* GESTURE_CURIOSITY      */ {{{-34, -34, 32, 32}, {0.0, 0.0, 0.0, PI_}, 1, 1200}, BEEP_QUERY_PAIR},
+    /* GESTURE_SEARCH         */ {{{38, 38, 0, 0},   {0.0, PI_, 0.0, 0.0}, 3,  800}, BEEP_NONE},
     /* GESTURE_IDLE_BREATHING */ {{{3, 3, 3, 3},     {0.0, 0.0, 0.0, 0.0}, 5, 2000}, BEEP_NONE},
     /* GESTURE_CHEER          */ {{{0, 0, 35, 35},   {0.0, 0.0, 0.0, 0.0}, 2,  500}, BEEP_FANFARE},
     /* GESTURE_THINKING       */ {{{-5, 0, 0, 0},    {0.0, 0.0, 0.0, 0.0}, 1, 1500}, BEEP_QUERY_RISING},
     /* GESTURE_SURPRISE       */ {{{20, 20, 0, 0},   {0.0, 0.0, 0.0, 0.0}, 1,  200}, BEEP_HIGH_SHORT},
     /* GESTURE_SLEEPY         */ {{{-15, -15, -15, -15}, {0.0, 0.0, 0.0, 0.0}, 1, 3000}, BEEP_FALLING_SLOW},
     /* GESTURE_WAKEUP         */ {{{15, 15, 0, 0},   {0.0, 0.0, 0.0, 0.0}, 1, 2000}, BEEP_RISING_FAST},
-    /* GESTURE_CONFIRMATION   */ {{{0, 0, 15, 15},   {0.0, 0.0, 0.0, 0.0}, 1,  400}, BEEP_OK_SHORT},
-    /* GESTURE_ERROR_ALERT    */ {{{15, 15, 15, 15}, {0.0, 0.0, HALF_PI_, HALF_PI_}, 2, 200}, BEEP_ERROR_DESCENDING},
+    /* GESTURE_CONFIRMATION   */ {{{0, 0, 34, 34},   {0.0, 0.0, 0.0, 0.0}, 1,  400}, BEEP_OK_SHORT},
+    /* GESTURE_ERROR_ALERT    */ {{{36, 36, 28, 28}, {0.0, 0.0, HALF_PI_, HALF_PI_}, 2, 200}, BEEP_ERROR_DESCENDING},
 };
 
 }  // namespace
