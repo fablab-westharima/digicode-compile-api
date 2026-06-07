@@ -363,16 +363,21 @@ private:
         {0.0, 0.0, HALF_PI_, HALF_PI_},
         {0, 0, 8, -8}
     };
-    // TURN: walk gait with asymmetric hip amplitudes (same coordination as
-    // WALK: in-phase hips + foot weight-shift + foot ±offset). Only the hip amp
-    // differs L/R so the bigger-stepping leg makes the robot arc; the foot phase
-    // is flipped UNCONDITIONALLY so BOTH turn directions travel forward.
-    // Session 160: foot offset {0,0,8,-8} (was {0,0,0,0} = no weight-shift = no
-    // visible arc) + hip asymmetry {42,14} (差動 28); matches OTTO turn
-    // physics (walk-gait + hip-amp arc) with DigiCode-original values.
+    // TURN: walk-gait arc — asymmetric hip amplitudes (差動 28 = {42,14}) make
+    // the bigger-stepping leg sweep the robot into an arc; _applyDirection swaps
+    // the hip amps on dir<0 for handedness. Session 160 backlash finding (Takeda
+    // hardware analysis): the feet must ROLL the body to one side (lateral weight
+    // shift) so the SWING-side toe LIFTS off the ground. A toe-DOWN swing foot
+    // scrapes because, unloaded, gear backlash lets it over-tilt past the
+    // commanded angle. So the feet are ANTI-phase electrically ({π/2, 3π/2}) →
+    // on the mirror mount they tilt the SAME physical direction (τ_L = τ_R, a
+    // clean roll), NOT the in-phase counter-tilt that WALK and OTTO turn() use.
+    // _applyDirection also swaps the foot phases on dir<0 so the correct (inner)
+    // foot loads for each turn direction. Foot phase still +π (forward travel).
+    // Values DigiCode-original (OTTO turn() uses in-phase feet, offset {4,-4}).
     static constexpr MotionShape TURN_SHAPE = {
         {42, 14, 33, 33},
-        {0.0, 0.0, HALF_PI_, HALF_PI_},
+        {0.0, 0.0, HALF_PI_, THREE_HALF_PI_},
         {0, 0, 10, -10}
     };
     // JUMP: hips static, both ankles snap-extend together. Same physical
@@ -513,21 +518,29 @@ private:
                 }
                 break;
             case MOTION_TURN:
-                // The turn is a walk with asymmetric hips: the hip-amp swap
-                // sets rotation handedness (left/right) while the foot
-                // weight-shift phase sets forward/backward travel — same as
-                // WALK. The base π/2 foot phase travels BACKWARD (Session 160
-                // hardware finding: "turning while moving backward", same root
-                // as WALK). The hip-amp swap does NOT change the hip↔foot phase
-                // relationship, so travel direction is identical for both turn
-                // directions → flip the foot phase UNCONDITIONALLY so both left
-                // and right turns rotate while moving forward.
+                // Turn = walk-gait arc with anti-phase feet (TURN_SHAPE). Three
+                // transforms:
+                //  (1) foot phase +π UNCONDITIONALLY → forward travel for both
+                //      turn directions (base π/2 travels backward, same root as
+                //      WALK; Session 160 hardware finding).
+                //  (2) dir<0: swap hip amplitudes → rotation handedness.
+                //  (3) dir<0: swap foot phases → flip the body-roll side. The
+                //      anti-phase feet roll the SAME physical direction
+                //      (τ_L = τ_R), so the roll side is fixed by the foot phases;
+                //      without (3) both turn directions would roll the same way
+                //      and the WRONG (outer) foot would load on one of them
+                //      (Session 160 backlash finding). Swapping the two foot
+                //      phases reverses the roll so the inner foot loads and the
+                //      swing toe lifts for each direction.
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_LEG];
                     amp[LEFT_LEG]  = amp[RIGHT_LEG];
                     amp[RIGHT_LEG] = t;
+                    double pt = phase[LEFT_FOOT];
+                    phase[LEFT_FOOT]  = phase[RIGHT_FOOT];
+                    phase[RIGHT_FOOT] = pt;
                 }
                 break;
             case MOTION_BEND:

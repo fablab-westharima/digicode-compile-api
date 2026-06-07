@@ -292,7 +292,7 @@ private:
     //    transformer linkage and need Phase E hardware confirmation.
     static constexpr MotionShape SHIFT_SHAPE       = {{45, 45, 0, 0},   {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // hips fold together (anti-phase elec)
     static constexpr MotionShape WALK_SHAPE        = {{40, 40, 35, 35}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 8, -8}};  // alternating legs (in-phase hips)
-    static constexpr MotionShape TURN_SHAPE        = {{42, 14, 33, 33}, {0.0, 0.0, HALF_PI_, HALF_PI_},     {0, 0, 10, -10}}; // walk-gait arc: hip amp 差動28 + foot offset ±10 (Session 160、OTTO 物理・値独自)
+    static constexpr MotionShape TURN_SHAPE        = {{42, 14, 33, 33}, {0.0, 0.0, HALF_PI_, THREE_HALF_PI_}, {0, 0, 10, -10}}; // walk-gait arc: anti-phase feet (鏡像で同方向 roll → 旋回側 toe-up、Session 160 backlash) + hip 差動28 + offset ±10。OTTO 物理・値独自 (OTTO turn は in-phase feet)
     static constexpr MotionShape ROLL_SHAPE        = {{0, 0, 45, 45},   {0.0, 0.0, 0.0, PI_},               {0, 0, 0, 0}};   // feet roll together (anti-phase elec)
     static constexpr MotionShape ROLL_ROTATE_SHAPE = {{12, 12, 45, 45}, {0.0, PI_, 0.0, 0.0},               {0, 0, 0, 0}};   // feet spin opposite (in-phase elec)
     static constexpr MotionShape PUSHUP_SHAPE      = {{42, 42, 38, 38}, {0.0, PI_, 0.0, PI_},               {0, 0, 0, 0}};   // push together (anti-phase elec)
@@ -387,17 +387,23 @@ private:
                 }
                 break;
             case MOTION_TURN:
-                // Same as DigiBiped TURN (Session 160 hardware finding): the
-                // base π/2 foot weight-shift phase travels BACKWARD. The
-                // hip-amp swap (handedness) does not change the hip↔foot phase
-                // relationship, so flip the foot phase UNCONDITIONALLY → both
-                // left and right turns rotate while moving forward.
+                // Same as DigiBiped TURN (Session 160 backlash finding): feet are
+                // anti-phase (TURN_SHAPE) so they roll the body one way and the
+                // SWING toe lifts (a toe-DOWN swing foot scrapes under gear
+                // backlash). (1) foot phase +π UNCONDITIONALLY = forward travel;
+                // (2) dir<0 swap hip amps = handedness; (3) dir<0 swap foot
+                // phases = flip the roll side so the correct (inner) foot loads
+                // per direction (the anti-phase feet roll the same physical way,
+                // so the roll side is fixed by the foot phases).
                 phase[LEFT_FOOT]  += PI_;
                 phase[RIGHT_FOOT] += PI_;
                 if (_direction < 0) {
                     int t = amp[LEFT_HIP];
                     amp[LEFT_HIP]  = amp[RIGHT_HIP];
                     amp[RIGHT_HIP] = t;
+                    double pt = phase[LEFT_FOOT];
+                    phase[LEFT_FOOT]  = phase[RIGHT_FOOT];
+                    phase[RIGHT_FOOT] = pt;
                 }
                 break;
             default:

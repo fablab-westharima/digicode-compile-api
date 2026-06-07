@@ -326,6 +326,30 @@ TEST(DigiBiped, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);
 }
 
+// Session 160 backlash redesign (Takeda hardware analysis): TURN drives the feet
+// ANTI-phase so on the mirror mount they tilt the SAME physical direction
+// (τ_L = τ_R). In command terms τ_L = lf-90 and τ_R = 90-rf, so τ_L = τ_R folds
+// to lf + rf = 2*HOME (the ±offset and the opposite oscillation cancel) — this is
+// the "feet roll the body one way → swing-side toe lifts" condition. Contrast
+// WALK, whose in-phase feet keep lf - rf constant instead. (±2 tolerates the
+// truncation in valueAt; an in-phase turn would give lf+rf far from 2*HOME.)
+TEST(DigiBiped, TurnFeetRollSamePhysicalDirection) {
+    DigiBiped biped;
+    MockChannel ll, rl, lf, rf;
+    biped.attachChannels(&ll, &rl, &lf, &rf);
+    biped.init();
+
+    biped.turnAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0);
+    biped.tick(366);  // ~quarter period → foot oscillation non-zero
+
+    const long footSum = lf.lastSetTarget + rf.lastSetTarget;
+    EXPECT_GE(footSum, 2 * DigiBiped::HOME_DEG - 2);   // anti-phase feet fold to ~2*HOME
+    EXPECT_LE(footSum, 2 * DigiBiped::HOME_DEG + 2);
+    EXPECT_NE(lf.lastSetTarget, rf.lastSetTarget);     // feet move oppositely (osc differs)
+    EXPECT_NE(ll.lastSetTarget, rl.lastSetTarget);     // hips asymmetric → turn handedness
+    EXPECT_NE(ll.lastSetTarget, DigiBiped::HOME_DEG);  // motion is happening
+}
+
 TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {
     DigiBiped biped;
     MockChannel ll, rl, lf, rf;

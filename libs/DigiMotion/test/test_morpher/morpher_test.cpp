@@ -222,6 +222,28 @@ TEST(DigiMorpher, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);     // feet ±8 offset bias (Session 160 dynamic)
 }
 
+// Session 160 backlash redesign (mirrors the DigiBiped turn test): TURN drives
+// the feet ANTI-phase so on the mirror mount they tilt the SAME physical
+// direction (τ_L = τ_R ⇔ lf + rf folds to 2*HOME), rolling the body one way so
+// the swing-side toe lifts. A toe-down swing foot scrapes under gear backlash.
+// Contrast WALK's in-phase feet (lf - rf constant). Default mode is MORPH_WALK;
+// turn is a walk-mode motion.
+TEST(DigiMorpher, TurnFeetRollSamePhysicalDirection) {
+    DigiMorpher m;
+    MockChannel lh, rh, lf, rf;
+    m.attachChannels(&lh, &rh, &lf, &rf);
+    m.init();
+
+    EXPECT_TRUE(m.turnAsync(/*steps=*/4, /*direction=*/1, /*speed=*/60, /*nowMs=*/0));
+    m.tick(366);
+
+    const long footSum = lf.lastSetTarget + rf.lastSetTarget;
+    EXPECT_GE(footSum, 2 * DigiMorpher::HOME_DEG - 2);   // anti-phase feet fold to ~2*HOME
+    EXPECT_LE(footSum, 2 * DigiMorpher::HOME_DEG + 2);
+    EXPECT_NE(lf.lastSetTarget, rf.lastSetTarget);       // feet move oppositely
+    EXPECT_NE(lh.lastSetTarget, rh.lastSetTarget);       // hips asymmetric → turn handedness
+}
+
 TEST(DigiMorpher, StopReturnsToIdleAndHome) {
     DigiMorpher m;
     MockChannel lh, rh, lf, rf;
