@@ -219,7 +219,7 @@ TEST(DigiMorpher, WalkHipsAreInPhaseFeetCarryOffsetBias) {
 
     EXPECT_EQ(lh.lastSetTarget, rh.lastSetTarget);          // hips in-phase
     EXPECT_NE(lh.lastSetTarget, DigiMorpher::HOME_DEG);     // motion happening
-    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 6);      // feet ±3 offset bias
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);     // feet ±8 offset bias (Session 160 dynamic)
 }
 
 TEST(DigiMorpher, StopReturnsToIdleAndHome) {

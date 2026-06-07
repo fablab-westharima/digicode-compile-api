@@ -31,7 +31,7 @@
  *     copied table — any correct mirror-mounted biped (Otto included) shares
  *     the in-phase-hip relationship because the hardware geometry dictates
  *     it. The amplitude and offset MAGNITUDES are DigiCode-original values
- *     (e.g. WALK = {22,22,16,16} amp, {0,0,90,90}° phase, {0,0,+3,-3}
+ *     (e.g. WALK = {40,40,35,35} amp, {0,0,90,90}° phase, {0,0,+8,-8}
  *     offset), not Otto's {30,30,20,20} / {0,0,4,-4}. Session 159 corrected
  *     the earlier anti-phase-hip values that, while numerically distinct
  *     from Otto, were physically wrong (sumo-shuffle on real hardware).
@@ -359,56 +359,56 @@ private:
     // _applyDirection; Session 160 hardware finding: the base π/2 phase drives
     // the body backward), NOT a global amplitude sign change.
     static constexpr MotionShape WALK_SHAPE = {
-        {30, 30, 22, 22},
+        {40, 40, 35, 35},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
-        {0, 0, 3, -3}
+        {0, 0, 8, -8}
     };
     // TURN: walk gait with asymmetric hip amplitudes (same coordination as
     // WALK: in-phase hips + foot weight-shift + foot ±offset). Only the hip amp
     // differs L/R so the bigger-stepping leg makes the robot arc; the foot phase
     // is flipped UNCONDITIONALLY so BOTH turn directions travel forward.
-    // Session 160: restored the foot offset {0,0,3,-3} (was {0,0,0,0} = no
-    // weight-shift = no visible arc) + hip asymmetry {30,8}; matches OTTO turn
+    // Session 160: foot offset {0,0,8,-8} (was {0,0,0,0} = no weight-shift = no
+    // visible arc) + hip asymmetry {42,14} (差動 28); matches OTTO turn
     // physics (walk-gait + hip-amp arc) with DigiCode-original values.
     static constexpr MotionShape TURN_SHAPE = {
-        {30, 8, 22, 22},
+        {42, 14, 33, 33},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
-        {0, 0, 3, -3}
+        {0, 0, 10, -10}
     };
     // JUMP: hips static, both ankles snap-extend together. Same physical
     // direction (push off) ⇒ feet anti-phase electrically.
     static constexpr MotionShape JUMP_SHAPE = {
-        {0, 0, 40, 40},
+        {0, 0, 45, 45},
         {0.0, 0.0, 0.0, PI_},
         {0, 0, 0, 0}
     };
     // DANCE: expressive — hips alternate (in-phase) while feet syncopate a
     // half-cycle apart for a playful look.
     static constexpr MotionShape DANCE_SHAPE = {
-        {27, 27, 24, 24},
+        {38, 38, 35, 35},
         {0.0, 0.0, HALF_PI_, THREE_HALF_PI_},
-        {0, 0, 0, 0}
+        {0, 0, 8, -8}
     };
     // SWING: hips static, both feet rock the body side-to-side together
     // (same physical direction ⇒ feet anti-phase electrically).
     static constexpr MotionShape SWING_SHAPE = {
-        {0, 0, 30, 30},
+        {0, 0, 37, 37},
         {0.0, 0.0, 0.0, PI_},
-        {0, 0, 0, 0}
+        {0, 0, 8, -8}
     };
     // BEND: lean to one side — both hips tilt the body the same physical
     // direction ⇒ hips anti-phase electrically. _applyDirection negates the
     // amplitudes to lean the other way.
     static constexpr MotionShape BEND_SHAPE = {
-        {24, 24, 0, 0},
+        {42, 42, 0, 0},
         {0.0, PI_, 0.0, 0.0},
         {0, 0, 0, 0}
     };
     // MOONWALK: walk-like in-phase hips with a distinct slower foot timing.
     static constexpr MotionShape MOONWALK_SHAPE = {
-        {27, 27, 24, 24},
+        {38, 38, 35, 35},
         {0.0, 0.0, HALF_PI_, HALF_PI_},
-        {0, 0, 0, 0}
+        {0, 0, 8, -8}
     };
 
     const MotionShape& _shapeFor(MotionId m) const {

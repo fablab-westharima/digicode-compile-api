@@ -322,8 +322,8 @@ TEST(DigiBiped, WalkHipsAreInPhaseFeetCarryOffsetBias) {
     // Hips identical (in-phase, equal amp/offset) — the core fix.
     EXPECT_EQ(ll.lastSetTarget, rl.lastSetTarget);
     EXPECT_NE(ll.lastSetTarget, DigiBiped::HOME_DEG);  // motion is happening
-    // Feet share amp+phase but differ by the {+3,-3} offset bias.
-    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 6);
+    // Feet share amp+phase but differ by the {+8,-8} offset bias (Session 160 dynamic).
+    EXPECT_EQ(lf.lastSetTarget - rf.lastSetTarget, 16);
 }
 
 TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {
@@ -332,8 +332,8 @@ TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {
     biped.attachChannels(&ll, &rl, &lf, &rf);
     biped.init();
 
-    // speed=60, walk pattern max amp=22 → period = 4*22*1000/60 ≈ 1466 ms.
-    // 2 cycles target → after t >= 2*1466 = 2933 ms, motion completes.
+    // speed=60, walk pattern max amp=40 → period = 4*40*1000/60 ≈ 2666 ms.
+    // 2 cycles target → after t >= 2*2666 = 5333 ms, motion completes (Session 160 dynamic amp).
     biped.walkAsync(/*steps=*/2, /*direction=*/1, /*speed=*/60, /*nowMs=*/0);
     biped.tick(500);
     biped.tick(1500);
@@ -341,7 +341,7 @@ TEST(DigiBiped, TickCompletesMotionAfterRequestedCyclesAndReturnsToHome) {
 
     // Past 2 full cycles: motion transitions to IDLE and bank publishes
     // home targets.
-    biped.tick(4000);
+    biped.tick(6000);
     EXPECT_TRUE(biped.isIdle());
     EXPECT_EQ(biped.currentMotion(), DigiBiped::MOTION_IDLE);
     EXPECT_EQ(ll.lastSetTarget, DigiBiped::HOME_DEG);
